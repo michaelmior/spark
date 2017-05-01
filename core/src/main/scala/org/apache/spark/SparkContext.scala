@@ -1795,6 +1795,13 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   /**
+   * Discard a single partition of an RDD from memory or disk storage.
+   */
+  private[spark] def discardPartition(rddId: Int, splitIndex: Int, blocking: Boolean = true) {
+    env.blockManager.master.removePartition(rddId, splitIndex, blocking)
+  }
+
+  /**
    * Adds a JAR dependency for all tasks to be executed on this `SparkContext` in the future.
    *
    * If a jar is added during execution, it will not be available until the next TaskSet starts.

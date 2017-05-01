@@ -127,6 +127,19 @@ class BlockManagerMaster(
     }
   }
 
+  /** Remove the block corresponding to a given partition of an RDD. */
+  def removePartition(rddId: Int, splitIndex: Int, blocking: Boolean) {
+    val blockId = RDDBlockId(rddId, splitIndex)
+    val future = driverEndpoint.ask[Boolean](RemoveBlock(blockId))
+    future.onFailure {
+      case e: Exception =>
+        logWarning(s"Failed to remove partition $splitIndex for RDD $rddId - ${e.getMessage}", e)
+    }(ThreadUtils.sameThread)
+    if (blocking) {
+      timeout.awaitResult(future)
+    }
+  }
+
   /** Remove all blocks belonging to the given shuffle. */
   def removeShuffle(shuffleId: Int, blocking: Boolean) {
     val future = driverEndpoint.askSync[Future[Seq[Boolean]]](RemoveShuffle(shuffleId))

@@ -17,6 +17,8 @@
 
 package org.apache.spark
 
+import org.apache.spark.storage.StorageLevel
+
 /**
  * An identifier for a partition in an RDD.
  */
@@ -25,6 +27,11 @@ trait Partition extends Serializable {
    * Get the partition's index within its parent RDD
    */
   def index: Int
+
+  /**
+   * Separate storage level for the partition
+   */
+  var storageLevel: StorageLevel = StorageLevel.NONE
 
   // A better default implementation of HashCode
   override def hashCode(): Int = index
