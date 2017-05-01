@@ -47,7 +47,8 @@ class StorageLevel private(
 
   // TODO: Also add fields for caching priority, dataset ID, and flushing.
   private def this(flags: Int, replication: Int) {
-    this((flags & 8) != 0, (flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, (flags & 16) != 0, replication)
+    this((flags & 8) != 0, (flags & 4) != 0, (flags & 2) != 0, (flags & 1) != 0, (flags & 16) != 0,
+      replication)
   }
 
   def this() = this(false, true, false, false, false)  // For deserialization
@@ -239,7 +240,8 @@ object StorageLevel {
       deserialized: Boolean,
       replication: Int = 1,
       adaptive: Boolean = false): StorageLevel = {
-    getCachedStorageLevel(new StorageLevel(useDisk, useMemory, false, deserialized, adaptive, replication))
+    getCachedStorageLevel(new StorageLevel(useDisk, useMemory, false, deserialized, adaptive,
+      replication))
   }
 
   /**

@@ -44,7 +44,7 @@ import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.storage.memory._
 import org.apache.spark.unsafe.Platform
 import org.apache.spark.util._
-import org.apache.spark.util.io.ChunkedByteBuffer
+import org.apache.spark.util.io.{ChunkedByteBuffer, ChunkedByteBufferOutputStream}
 
 /* Class for returning a fetched block and associated metrics. */
 private[spark] class BlockResult(
@@ -1428,6 +1428,19 @@ private[spark] class BlockManager(
   }
 
   /**
+   * Remove a single partition for a given RDD.
+   *
+   * @return true if the partition was removed, false otherwise
+   */
+  def removePartition(rddId: Int, splitIndex: Int): Boolean = {
+    val blocksToRemove = blockInfoManager.entries
+      .flatMap(_._1.asRDDId)
+      .filter(rdd => rdd.rddId == rddId && rdd.splitIndex == splitIndex)
+    blocksToRemove.foreach { blockId => removeBlock(blockId, tellMaster = false) }
+    blocksToRemove.length > 0
+  }
+
+  /**
    * Remove all blocks belonging to the given broadcast.
    */
   def removeBroadcast(broadcastId: Long, tellMaster: Boolean): Int = {
@@ -1437,6 +1450,62 @@ private[spark] class BlockManager(
     }
     blocksToRemove.foreach { blockId => removeBlock(blockId, tellMaster) }
     blocksToRemove.size
+  }
+
+  /**
+   * Deserialize a block currently stored serialized in memory.
+   */
+  def deserializeBlock[T](blockId: BlockId, classTag: ClassTag[T]): Boolean = {
+    val stream = memoryStore.getBytes(blockId).get.toInputStream()
+    val values: Iterator[T] = serializerManager.dataDeserializeStream(
+      blockId, stream)(classTag)
+    memoryStore.putIteratorAsValues(blockId, values, classTag) match {
+      case Right(_) => true
+      case Left(iter) => false
+    }
+  }
+
+  /**
+   * Serialize a block currently stored deserialized in memory.
+   */
+  def serializeBlock[T](blockId: BlockId, classTag: ClassTag[T]): Boolean = {
+    val values: Iterator[T] = memoryStore.getValues(blockId).get.asInstanceOf[Iterator[T]]
+    val out = new ChunkedByteBufferOutputStream(1024 * 1024 * 4, ByteBuffer.allocate)
+    serializerManager.dataSerializeStream(blockId, out, values)(classTag)
+
+    val buffer = out.toChunkedByteBuffer
+    memoryStore.putBytes(blockId, buffer.size, MemoryMode.ON_HEAP, () => {
+      buffer
+    })
+  }
+
+  /**
+   * Convert a block to a new storage level.
+   */
+  def convertBlock(blockId: BlockId, newLevel: StorageLevel) {
+    blockInfoManager.lockForWriting(blockId) match {
+      case None =>
+        // The block has already been removed; do nothing.
+        logWarning(s"Asked to convert block $blockId, which does not exist")
+      case Some(info) =>
+        val blockStatus = getCurrentBlockStatus(blockId, info)
+        if (blockStatus.storageLevel == newLevel) {
+          return
+        }
+
+        // Either serialize or deserialize the block as appropriate
+        if (!blockStatus.storageLevel.deserialized && newLevel.deserialized) {
+          deserializeBlock(blockId, info.classTag)
+        } else if (blockStatus.storageLevel.deserialized && !newLevel.deserialized) {
+          serializeBlock(blockId, info.classTag)
+        }
+
+        if (info.tellMaster) {
+          // TODO: Get actual size and include droppedMemorySIze
+          val newStatus = BlockStatus(newLevel, memSize = 0L, diskSize = 0L)
+          reportBlockStatus(blockId, newStatus)
+        }
+    }
   }
 
   /**

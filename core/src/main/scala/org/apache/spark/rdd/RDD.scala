@@ -176,6 +176,14 @@ abstract class RDD[T: ClassTag](
       sc.persistRDD(this)
     }
     storageLevel = newLevel
+
+    // If we're using adaptive cachine, start with MEMORY_ONLY
+    var partitionLevel = newLevel
+    if (newLevel == StorageLevel.ADAPTIVE) {
+      partitionLevel = StorageLevel.MEMORY_ONLY
+    }
+    partitions.foreach(p => p.storageLevel = partitionLevel)
+
     this
   }
 
@@ -206,6 +214,23 @@ abstract class RDD[T: ClassTag](
   def cache(): this.type = persist()
 
   /**
+   * Convert this partition to a new storage level.
+   */
+  private def convert(split: Partition, newLevel: StorageLevel) {
+    if (split.storageLevel != newLevel) {
+      // TODO: Actually change the storage level
+    }
+  }
+
+  /**
+   * Discard this partition.
+   */
+  private def discard(split: Partition, blocking: Boolean = true) {
+    sc.discardPartition(id, split.index, blocking)
+    split.storageLevel = StorageLevel.NONE
+  }
+
+  /**
    * Mark the RDD as non-persistent, and remove all blocks for it from memory and disk.
    *
    * @param blocking Whether to block until all blocks are deleted.
@@ -215,6 +240,7 @@ abstract class RDD[T: ClassTag](
     logInfo("Removing RDD " + id + " from persistence list")
     sc.unpersistRDD(id, blocking)
     storageLevel = StorageLevel.NONE
+    partitions.foreach(p => p.storageLevel = StorageLevel.NONE)
     this
   }
 
@@ -281,7 +307,7 @@ abstract class RDD[T: ClassTag](
    * subclasses of RDD.
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
-    if (storageLevel != StorageLevel.NONE) {
+    if (split.storageLevel != StorageLevel.NONE) {
       getOrCompute(split, context)
     } else {
       computeOrReadCheckpoint(split, context)
@@ -331,7 +357,8 @@ abstract class RDD[T: ClassTag](
     val blockId = RDDBlockId(id, partition.index)
     var readCachedBlock = true
     // This method is called on executors, so we need call SparkEnv.get instead of sc.env.
-    SparkEnv.get.blockManager.getOrElseUpdate(blockId, storageLevel, elementClassTag, () => {
+    SparkEnv.get.blockManager.getOrElseUpdate(blockId, partition.storageLevel, elementClassTag,
+      () => {
       readCachedBlock = false
       computeOrReadCheckpoint(partition, context)
     }) match {

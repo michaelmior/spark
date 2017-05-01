@@ -1796,6 +1796,13 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   /**
+   * Discard a single partition of an RDD from memory or disk storage.
+   */
+  private[spark] def discardPartition(rddId: Int, splitIndex: Int, blocking: Boolean = true) {
+    env.blockManager.master.removePartition(rddId, splitIndex, blocking)
+  }
+
+  /**
    * Adds a JAR dependency for all tasks to be executed on this `SparkContext` in the future.
    * @param path can be either a local file, a file in HDFS (or other Hadoop-supported filesystems),
    * an HTTP, HTTPS or FTP URI, or local:/path for a file on every worker node.
