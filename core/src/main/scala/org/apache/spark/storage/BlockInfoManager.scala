@@ -43,7 +43,7 @@ import org.apache.spark.internal.Logging
  *                   is true for most blocks, but is false for broadcast blocks.
  */
 private[storage] class BlockInfo(
-    val level: StorageLevel,
+    var level: StorageLevel,
     val classTag: ClassTag[_],
     val tellMaster: Boolean) {
 
@@ -433,6 +433,17 @@ private[storage] class BlockInfoManager extends Logging {
           s"Task $currentTaskAttemptId called remove() on non-existent block $blockId")
     }
     notifyAll()
+  }
+
+  /**
+   * Forcibly update block storage level. Must be called with a write lock held.
+   * Used when modifying the storage level of a preexisting block.
+   */
+  def updateBlockLevel(
+      blockId: BlockId,
+      newLevel: StorageLevel): Unit = synchronized {
+    val info = assertBlockIsLockedForWriting(blockId)
+    info.level = newLevel
   }
 
   /**

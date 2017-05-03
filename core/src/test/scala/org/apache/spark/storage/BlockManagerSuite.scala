@@ -243,6 +243,28 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     assert(master.getLocations("a2").size === 2, "master did not report 2 locations for a2")
   }
 
+  test("converting block") {
+    store = makeBlockManager(20000)
+    val a1 = new Array[Byte](4000)
+    val a2 = new Array[Byte](4000)
+
+    // Putting a1 and a2 in memory
+    store.putSingle("a1-to-convert", a1, StorageLevel.MEMORY_ONLY)
+    store.putSingle("a2-to-convert", a1, StorageLevel.MEMORY_ONLY_SER)
+
+    // Convert a1 to serialized and a2 to deserialized
+    store.convertBlock("a1-to-convert", StorageLevel.MEMORY_ONLY_SER)
+    store.convertBlock("a2-to-convert", StorageLevel.MEMORY_ONLY)
+
+    var status = store.master.getBlockStatus("a1-to-convert", askSlaves = true)
+    assert(status.size == 1)
+    assert(status.head._2.storageLevel == StorageLevel.MEMORY_ONLY_SER)
+
+    status = store.master.getBlockStatus("a2-to-convert", askSlaves = true)
+    assert(status.size == 1)
+    assert(status.head._2.storageLevel == StorageLevel.MEMORY_ONLY)
+  }
+
   test("removing block") {
     store = makeBlockManager(20000)
     val a1 = new Array[Byte](4000)

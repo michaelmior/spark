@@ -1458,7 +1458,9 @@ private[spark] class BlockManager(
   def deserializeBlock[T](blockId: BlockId, classTag: ClassTag[T]): Boolean = {
     val stream = memoryStore.getBytes(blockId).get.toInputStream()
     val values: Iterator[T] = serializerManager.dataDeserializeStream(
-      blockId, stream)(classTag)
+      blockId, stream)(classTag).toIndexedSeq.iterator
+
+    memoryStore.remove(blockId)
     memoryStore.putIteratorAsValues(blockId, values, classTag) match {
       case Right(_) => true
       case Left(iter) => false
@@ -1474,6 +1476,7 @@ private[spark] class BlockManager(
     serializerManager.dataSerializeStream(blockId, out, values)(classTag)
 
     val buffer = out.toChunkedByteBuffer
+    memoryStore.remove(blockId)
     memoryStore.putBytes(blockId, buffer.size, MemoryMode.ON_HEAP, () => {
       buffer
     })
@@ -1489,22 +1492,27 @@ private[spark] class BlockManager(
         logWarning(s"Asked to convert block $blockId, which does not exist")
       case Some(info) =>
         val blockStatus = getCurrentBlockStatus(blockId, info)
+        assert(blockStatus.storageLevel.useMemory && !blockStatus.storageLevel.useDisk)
         if (blockStatus.storageLevel == newLevel) {
           return
         }
 
         // Either serialize or deserialize the block as appropriate
         if (!blockStatus.storageLevel.deserialized && newLevel.deserialized) {
-          deserializeBlock(blockId, info.classTag)
+          assert(deserializeBlock(blockId, info.classTag))
         } else if (blockStatus.storageLevel.deserialized && !newLevel.deserialized) {
-          serializeBlock(blockId, info.classTag)
+          assert(serializeBlock(blockId, info.classTag))
         }
 
+        // Force an update of the block storage level
+        blockInfoManager.updateBlockLevel(blockId, newLevel)
+
+        // TODO: Get actual size and include droppedMemorySIze
+        val newStatus = BlockStatus(newLevel, memSize = blockStatus.memSize, diskSize = 0L)
         if (info.tellMaster) {
-          // TODO: Get actual size and include droppedMemorySIze
-          val newStatus = BlockStatus(newLevel, memSize = 0L, diskSize = 0L)
           reportBlockStatus(blockId, newStatus)
         }
+        addUpdatedBlockStatusToTaskMetrics(blockId, newStatus)
     }
   }
 
