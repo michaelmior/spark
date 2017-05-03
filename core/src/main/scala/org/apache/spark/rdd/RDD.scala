@@ -177,12 +177,7 @@ abstract class RDD[T: ClassTag](
     }
     storageLevel = newLevel
 
-    // If we're using adaptive cachine, start with MEMORY_ONLY
-    var partitionLevel = newLevel
-    if (newLevel == StorageLevel.ADAPTIVE) {
-      partitionLevel = StorageLevel.MEMORY_ONLY
-    }
-    partitions.foreach(p => p.storageLevel = partitionLevel)
+    partitions.foreach(p => p.storageLevel = newLevel)
 
     this
   }

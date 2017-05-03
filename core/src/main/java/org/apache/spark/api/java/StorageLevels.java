@@ -35,7 +35,6 @@ public class StorageLevels {
   public static final StorageLevel MEMORY_AND_DISK_SER = create(true, true, false, false, 1);
   public static final StorageLevel MEMORY_AND_DISK_SER_2 = create(true, true, false, false, 2);
   public static final StorageLevel OFF_HEAP = create(true, true, true, false, 1);
-  public static final StorageLevel ADAPTIVE = create(false, true, false, false, true, 1);
 
   /**
    * Create a new StorageLevel object.
@@ -51,25 +50,6 @@ public class StorageLevels {
     boolean useOffHeap,
     boolean deserialized,
     int replication) {
-    return StorageLevel.apply(useDisk, useMemory, useOffHeap, deserialized, false, replication);
-  }
-
-  /**
-   * Create a new StorageLevel object.
-   * @param useDisk saved to disk, if true
-   * @param useMemory saved to on-heap memory, if true
-   * @param useOffHeap saved to off-heap memory, if true
-   * @param deserialized saved as deserialized objects, if true
-   * @param adaptive saved using adaptive caching, if true
-   * @param replication replication factor
-   */
-  public static StorageLevel create(
-    boolean useDisk,
-    boolean useMemory,
-    boolean useOffHeap,
-    boolean deserialized,
-    boolean adaptive,
-    int replication) {
-    return StorageLevel.apply(useDisk, useMemory, useOffHeap, deserialized, adaptive, replication);
+    return StorageLevel.apply(useDisk, useMemory, useOffHeap, deserialized, replication);
   }
 }
