@@ -17,6 +17,8 @@
 
 package org.apache.spark
 
+import org.apache.spark.storage.StorageLevel
+
 import org.scalatest.concurrent.Timeouts._
 import org.scalatest.time.{Millis, Span}
 
@@ -27,6 +29,8 @@ class UnpersistSuite extends SparkFunSuite with LocalSparkContext {
     rdd.count
     assert(sc.persistentRdds.isEmpty === false)
     rdd.unpersist()
+    assert(rdd.getStorageLevel == StorageLevel.NONE)
+    rdd.partitions.foreach(p => assert(p.storageLevel == StorageLevel.NONE))
     assert(sc.persistentRdds.isEmpty === true)
 
     failAfter(Span(3000, Millis)) {
