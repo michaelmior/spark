@@ -1376,8 +1376,16 @@ private[spark] class BlockManager(
     var blockIsUpdated = false
     val level = info.level
 
-    // Drop to disk, if storage level requires
-    if (level.useDisk && !diskStore.contains(blockId)) {
+    // Serialize if possible or drop to disk if required
+    val adaptive = conf.getBoolean("spark.storage.adaptive", false)
+    var serialized = false
+    if (adaptive && level.useMemory && !level.useOffHeap && level.deserialized) {
+      val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap, false, level.replication)
+      convertBlockInternal(blockId, newLevel)
+      serialized = true
+    }
+
+    if (!serialized && level.useDisk && !diskStore.contains(blockId)) {
       logInfo(s"Writing block $blockId to disk")
       data() match {
         case Left(elements) =>
@@ -1491,30 +1499,39 @@ private[spark] class BlockManager(
         // The block has already been removed; do nothing.
         logWarning(s"Asked to convert block $blockId, which does not exist")
       case Some(info) =>
-        val blockStatus = getCurrentBlockStatus(blockId, info)
-        assert(blockStatus.storageLevel.useMemory && !blockStatus.storageLevel.useDisk)
-        if (blockStatus.storageLevel == newLevel) {
-          return
-        }
-
-        // Either serialize or deserialize the block as appropriate
-        val oldSize = memoryStore.getSize(blockId)
-        if (!blockStatus.storageLevel.deserialized && newLevel.deserialized) {
-          assert(deserializeBlock(blockId, info.classTag))
-        } else if (blockStatus.storageLevel.deserialized && !newLevel.deserialized) {
-          assert(serializeBlock(blockId, info.classTag))
-        }
-
-        // Force an update of the block storage level
-        blockInfoManager.updateBlockLevel(blockId, newLevel)
-
-        val newSize = memoryStore.getSize(blockId)
-        val newStatus = BlockStatus(newLevel, memSize = newSize, diskSize = 0L)
-        if (info.tellMaster) {
-          reportBlockStatus(blockId, newStatus, (oldSize - newSize).max(0))
-        }
-        addUpdatedBlockStatusToTaskMetrics(blockId, newStatus)
+        convertBlockInternal(blockId, newLevel)
     }
+  }
+
+  /**
+   * Internal version of [[convertBlock()]] which assumes that the caller already holds a write
+   * lock on the block.
+   */
+  private def convertBlockInternal(blockId: BlockId, newLevel: StorageLevel) {
+    val info = blockInfoManager.assertBlockIsLockedForWriting(blockId)
+    val blockStatus = getCurrentBlockStatus(blockId, info)
+    assert(blockStatus.storageLevel.useMemory && !blockStatus.storageLevel.useDisk)
+    if (blockStatus.storageLevel == newLevel) {
+      return
+    }
+
+    // Either serialize or deserialize the block as appropriate
+    val oldSize = memoryStore.getSize(blockId)
+    if (!blockStatus.storageLevel.deserialized && newLevel.deserialized) {
+      assert(deserializeBlock(blockId, info.classTag))
+    } else if (blockStatus.storageLevel.deserialized && !newLevel.deserialized) {
+      assert(serializeBlock(blockId, info.classTag))
+    }
+
+    // Force an update of the block storage level
+    blockInfoManager.updateBlockLevel(blockId, newLevel)
+
+    val newSize = memoryStore.getSize(blockId)
+    val newStatus = BlockStatus(newLevel, memSize = newSize, diskSize = 0L)
+    if (info.tellMaster) {
+      reportBlockStatus(blockId, newStatus, (oldSize - newSize).max(0))
+    }
+    addUpdatedBlockStatusToTaskMetrics(blockId, newStatus)
   }
 
   /**

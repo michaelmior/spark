@@ -1166,6 +1166,13 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
+  <td><code>spark.storage.adaptive</code></td>
+  <td>false</td>
+  <td>
+    Whether to attempt to perform adaptive caching.
+  </td>
+</tr>
+<tr>
   <td><code>spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version</code></td>
   <td>1</td>
   <td>
