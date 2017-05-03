@@ -1498,6 +1498,7 @@ private[spark] class BlockManager(
         }
 
         // Either serialize or deserialize the block as appropriate
+        val oldSize = memoryStore.getSize(blockId)
         if (!blockStatus.storageLevel.deserialized && newLevel.deserialized) {
           assert(deserializeBlock(blockId, info.classTag))
         } else if (blockStatus.storageLevel.deserialized && !newLevel.deserialized) {
@@ -1507,10 +1508,10 @@ private[spark] class BlockManager(
         // Force an update of the block storage level
         blockInfoManager.updateBlockLevel(blockId, newLevel)
 
-        // TODO: Get actual size and include droppedMemorySIze
-        val newStatus = BlockStatus(newLevel, memSize = blockStatus.memSize, diskSize = 0L)
+        val newSize = memoryStore.getSize(blockId)
+        val newStatus = BlockStatus(newLevel, memSize = newSize, diskSize = 0L)
         if (info.tellMaster) {
-          reportBlockStatus(blockId, newStatus)
+          reportBlockStatus(blockId, newStatus, (oldSize - newSize).max(0))
         }
         addUpdatedBlockStatusToTaskMetrics(blockId, newStatus)
     }
