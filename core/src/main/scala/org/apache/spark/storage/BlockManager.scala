@@ -493,6 +493,8 @@ private[spark] class BlockManager(
    * Get block from local block manager as an iterator of Java objects.
    */
   def getLocalValues(blockId: BlockId): Option[BlockResult] = {
+    val adaptive = conf.getBoolean("spark.storage.adaptive", false)
+
     logDebug(s"Getting local block $blockId")
     blockInfoManager.lockForReading(blockId) match {
       case None =>
@@ -503,7 +505,13 @@ private[spark] class BlockManager(
         logDebug(s"Level for block $blockId is $level")
         val taskAttemptId = Option(TaskContext.get()).map(_.taskAttemptId())
         if (level.useMemory && memoryStore.contains(blockId)) {
-          val iter: Iterator[Any] = if (level.deserialized) {
+          val adaptive = conf.getBoolean("spark.storage.adaptive", false)
+          if (adaptive && !level.deserialized) {
+            val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap, false, level.replication)
+            convertBlockInternal(blockId, newLevel)
+          }
+
+          val iter: Iterator[Any] = if (!adaptive && level.deserialized) {
             memoryStore.getValues(blockId).get
           } else {
             serializerManager.dataDeserializeStream(

@@ -682,34 +682,40 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     assert(store.getSingleAndReleaseLock("a1").isDefined, "a1 was in store")
   }
 
+  test("adaptive disk and memory storage") {
+    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK, getAsBytes = true, adaptive = true, testConf = conf)
+  }
+
   encryptionTest("disk and memory storage") { _conf =>
-    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK, getAsBytes = false, testConf = conf)
+    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK, getAsBytes = false, adaptive = false, testConf = conf)
   }
 
   encryptionTest("disk and memory storage with getLocalBytes") { _conf =>
-    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK, getAsBytes = true, testConf = conf)
+    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK, getAsBytes = true, adaptive = false, testConf = conf)
   }
 
   encryptionTest("disk and memory storage with serialization") { _conf =>
-    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK_SER, getAsBytes = false, testConf = conf)
+    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK_SER, getAsBytes = false, adaptive = false, testConf = conf)
   }
 
   encryptionTest("disk and memory storage with serialization and getLocalBytes") { _conf =>
-    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK_SER, getAsBytes = true, testConf = conf)
+    testDiskAndMemoryStorage(StorageLevel.MEMORY_AND_DISK_SER, getAsBytes = true, adaptive = false, testConf = conf)
   }
 
   encryptionTest("disk and off-heap memory storage") { _conf =>
-    testDiskAndMemoryStorage(StorageLevel.OFF_HEAP, getAsBytes = false, testConf = conf)
+    testDiskAndMemoryStorage(StorageLevel.OFF_HEAP, getAsBytes = false, adaptive = false, testConf = conf)
   }
 
   encryptionTest("disk and off-heap memory storage with getLocalBytes") { _conf =>
-    testDiskAndMemoryStorage(StorageLevel.OFF_HEAP, getAsBytes = true, testConf = conf)
+    testDiskAndMemoryStorage(StorageLevel.OFF_HEAP, getAsBytes = true, adaptive = false, testConf = conf)
   }
 
   def testDiskAndMemoryStorage(
       storageLevel: StorageLevel,
       getAsBytes: Boolean,
+      adaptive: Boolean,
       testConf: SparkConf): Unit = {
+    testConf.set("spark.storage.adaptive", adaptive.toString)
     store = makeBlockManager(12000, testConf = Some(testConf))
     val accessMethod =
       if (getAsBytes) store.getLocalBytesAndReleaseLock else store.getSingleAndReleaseLock
@@ -723,7 +729,7 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     assert(accessMethod("a3").isDefined, "a3 was not in store")
     assert(accessMethod("a1").isDefined, "a1 was not in store")
     val dataShouldHaveBeenCachedBackIntoMemory = {
-      if (storageLevel.deserialized) {
+      if (storageLevel.deserialized && !adaptive) {
         !getAsBytes
       } else {
         // If the block's storage level is serialized, then always cache the bytes in memory, even
