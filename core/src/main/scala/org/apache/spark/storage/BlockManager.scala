@@ -1376,13 +1376,21 @@ private[spark] class BlockManager(
     var blockIsUpdated = false
     val level = info.level
 
+    var droppedMemorySize =
+      if (memoryStore.contains(blockId)) memoryStore.getSize(blockId) else 0L
+
     // Serialize if possible or drop to disk if required
     val adaptive = conf.getBoolean("spark.storage.adaptive", false)
     var serialized = false
+    var converted = false
     if (adaptive && level.useMemory && !level.useOffHeap && level.deserialized) {
       val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap, false, level.replication)
-      convertBlockInternal(blockId, newLevel)
-      serialized = true
+      serialized = convertBlockInternal(blockId, newLevel)
+      if (serialized) {
+        droppedMemorySize -= memoryStore.getSize(blockId)
+      }
+      converted = true
+      blockIsUpdated = true
     }
 
     if (!serialized && level.useDisk && !diskStore.contains(blockId)) {
@@ -1402,10 +1410,12 @@ private[spark] class BlockManager(
       blockIsUpdated = true
     }
 
-    // Actually drop from memory store
-    val droppedMemorySize =
-      if (memoryStore.contains(blockId)) memoryStore.getSize(blockId) else 0L
-    val blockIsRemoved = memoryStore.remove(blockId)
+    // Actually drop from memory store unless we converted the block
+    val blockIsRemoved = if (converted) {
+      true
+    } else {
+      memoryStore.remove(blockId)
+    }
     if (blockIsRemoved) {
       blockIsUpdated = true
     } else {
