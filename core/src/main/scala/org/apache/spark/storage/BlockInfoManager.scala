@@ -140,6 +140,13 @@ private[storage] class BlockInfoManager extends Logging {
   private[this] val readLocksByTask =
     new mutable.HashMap[TaskAttemptId, ConcurrentHashMultiset[BlockId]]
 
+  /**
+   * Tracks the number of re-entrant locks held by a task prior to lock escalation so that the
+   * correct count can be restored when the read lock is released.
+   */
+  @GuardedBy("this")
+  private[this] val readerCount = new mutable.HashMap[BlockId, Int]
+
   // ----------------------------------------------------------------------------------------------
 
   // Initialization for special task attempt ids:
@@ -266,6 +273,31 @@ private[storage] class BlockInfoManager extends Logging {
   }
 
   /**
+   * Upgrades a read lock to an exclusive write lock.
+   */
+  def upgradeLock(blockId: BlockId, blocking: Boolean = true): Boolean = synchronized {
+    logTrace(s"Task $currentTaskAttemptId upgrading read lock for $blockId")
+    val info = get(blockId).get
+    do {
+      val countsForTask = readLocksByTask(currentTaskAttemptId)
+      if (countsForTask.count(blockId) == info.readerCount) {
+        writeLocksByTask.addBinding(currentTaskAttemptId, blockId)
+        readerCount(blockId) = info.readerCount
+        countsForTask.remove(blockId, info.readerCount)
+        info.readerCount = 0
+        info.writerTask = currentTaskAttemptId
+        logTrace(s"Task $currentTaskAttemptId acquired write lock for $blockId")
+        return true
+      }
+
+      if (blocking) {
+        wait()
+      }
+    } while (blocking)
+    false
+  }
+
+  /**
    * Downgrades an exclusive write lock to a shared read lock.
    */
   def downgradeLock(blockId: BlockId): Unit = synchronized {
@@ -293,6 +325,14 @@ private[storage] class BlockInfoManager extends Logging {
       throw new IllegalStateException(s"Block $blockId not found")
     }
     if (info.writerTask != BlockInfo.NO_WRITER) {
+      // Restore the read locks held before escalation
+      if (readerCount.contains(blockId)) {
+        info.writerTask = BlockInfo.NO_WRITER
+        info.readerCount = readerCount(blockId)
+        readLocksByTask(currentTaskAttemptId).add(blockId, readerCount(blockId))
+        readerCount.remove(blockId)
+      }
+
       info.writerTask = BlockInfo.NO_WRITER
       writeLocksByTask.removeBinding(taskId, blockId)
     } else {

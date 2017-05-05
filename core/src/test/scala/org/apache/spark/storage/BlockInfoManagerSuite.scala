@@ -193,6 +193,40 @@ class BlockInfoManagerSuite extends SparkFunSuite with BeforeAndAfterEach {
     assert(blockInfoManager.get("block").get.readerCount === 4)
   }
 
+  test("write locks can be upgraded") {
+    withTaskId(0) {
+      assert(blockInfoManager.lockNewBlockForWriting("block", newBlockInfo()))
+      blockInfoManager.unlock("block")
+      assert(blockInfoManager.lockForReading("block").isDefined)
+      assert(blockInfoManager.lockForReading("block").isDefined)
+      assert(blockInfoManager.get("block").get.readerCount === 2)
+      blockInfoManager.upgradeLock("block")
+      assert(blockInfoManager.get("block").get.readerCount === 0)
+    }
+    withTaskId(1) {
+      assert(blockInfoManager.lockForWriting("block", blocking = false).isEmpty)
+      assert(blockInfoManager.get("block").get.writerTask === 0)
+    }
+    withTaskId(0) {
+      blockInfoManager.unlock("block")
+      assert(blockInfoManager.get("block").get.readerCount === 2)
+    }
+  }
+
+  test("upgrading a write lock fails if there are other readers") {
+    withTaskId(0) {
+      assert(blockInfoManager.lockNewBlockForWriting("block", newBlockInfo()))
+      blockInfoManager.unlock("block")
+      assert(blockInfoManager.lockForReading("block").isDefined)
+    }
+    withTaskId(1) {
+      assert(blockInfoManager.lockForReading("block").isDefined)
+    }
+    withTaskId(0) {
+      assert(!blockInfoManager.upgradeLock("block", blocking = false))
+    }
+  }
+
   test("single task can hold write lock") {
     withTaskId(0) {
       assert(blockInfoManager.lockNewBlockForWriting("block", newBlockInfo()))
