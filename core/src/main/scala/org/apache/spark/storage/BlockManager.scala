@@ -507,7 +507,8 @@ private[spark] class BlockManager(
         if (level.useMemory && memoryStore.contains(blockId)) {
           val adaptive = conf.getBoolean("spark.storage.adaptive", false)
           if (adaptive && !level.deserialized) {
-            val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap, false, level.replication)
+            val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap,
+              false, level.replication)
             convertBlockInternal(blockId, newLevel)
           }
 
@@ -1392,7 +1393,8 @@ private[spark] class BlockManager(
     var serialized = false
     var converted = false
     if (adaptive && level.useMemory && !level.useOffHeap && level.deserialized) {
-      val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap, false, level.replication)
+      val newLevel = StorageLevel(level.useDisk, level.useMemory, level.useOffHeap,
+        false, level.replication)
       serialized = convertBlockInternal(blockId, newLevel)
       if (serialized) {
         droppedMemorySize -= memoryStore.getSize(blockId)
