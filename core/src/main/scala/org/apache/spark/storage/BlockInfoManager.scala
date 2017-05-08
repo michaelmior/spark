@@ -147,6 +147,14 @@ private[storage] class BlockInfoManager extends Logging {
   @GuardedBy("this")
   private[this] val readerCount = new mutable.HashMap[BlockId, Int]
 
+  /**
+   * Tracks the blocks which are stored for each RDD.
+   */
+  @GuardedBy("this")
+  private[this] val rddBlocks =
+    new mutable.HashMap[Int, mutable.Set[RDDBlockId]]
+      with mutable.MultiMap[Int, RDDBlockId]
+
   // ----------------------------------------------------------------------------------------------
 
   // Initialization for special task attempt ids:
@@ -369,6 +377,10 @@ private[storage] class BlockInfoManager extends Logging {
       case None =>
         // Block does not yet exist or is removed, so we are free to acquire the write lock
         infos(blockId) = newBlockInfo
+        if (blockId.isRDD) {
+          val rddBlockId = blockId.asRDDId.get
+          rddBlocks.addBinding(rddBlockId.rddId, rddBlockId)
+        }
         lockForWriting(blockId)
         true
     }
@@ -451,6 +463,13 @@ private[storage] class BlockInfoManager extends Logging {
   }
 
   /**
+   * Returns an iterator over a snapshot of blocks stored for a given RDD.
+   */
+  def getBlocksForRdd(rddId: Int): Iterator[RDDBlockId] = {
+    rddBlocks(rddId).toArray.toIterator
+  }
+
+  /**
    * Removes the given block and releases the write lock on it.
    *
    * This can only be called while holding a write lock on the given block.
@@ -464,6 +483,10 @@ private[storage] class BlockInfoManager extends Logging {
             s"Task $currentTaskAttemptId called remove() on block $blockId without a write lock")
         } else {
           infos.remove(blockId)
+          if (blockId.isRDD) {
+            val rddBlockId = blockId.asRDDId.get
+            rddBlocks.removeBinding(rddBlockId.rddId, rddBlockId)
+          }
           blockInfo.readerCount = 0
           blockInfo.writerTask = BlockInfo.NO_WRITER
           writeLocksByTask.removeBinding(currentTaskAttemptId, blockId)
@@ -495,6 +518,7 @@ private[storage] class BlockInfoManager extends Logging {
       blockInfo.writerTask = BlockInfo.NO_WRITER
     }
     infos.clear()
+    rddBlocks.clear()
     readLocksByTask.clear()
     writeLocksByTask.clear()
     notifyAll()
