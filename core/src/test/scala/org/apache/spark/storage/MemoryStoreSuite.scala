@@ -131,7 +131,7 @@ class MemoryStoreSuite
     def putIteratorAsValues[T](
         blockId: BlockId,
         iter: Iterator[T],
-        classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], Long] = {
+        classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], (Long, Long)] = {
       assert(blockInfoManager.lockNewBlockForWriting(
         blockId,
         new BlockInfo(StorageLevel.MEMORY_ONLY, classTag, tellMaster = false)))
@@ -186,7 +186,7 @@ class MemoryStoreSuite
     def putIteratorAsValues[T](
         blockId: BlockId,
         iter: Iterator[T],
-        classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], Long] = {
+        classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], (Long, Long)] = {
       assert(blockInfoManager.lockNewBlockForWriting(
         blockId,
         new BlockInfo(StorageLevel.MEMORY_ONLY, classTag, tellMaster = false)))
@@ -250,7 +250,7 @@ class MemoryStoreSuite
     def putIteratorAsBytes[T](
         blockId: BlockId,
         iter: Iterator[T],
-        classTag: ClassTag[T]): Either[PartiallySerializedBlock[T], Long] = {
+        classTag: ClassTag[T]): Either[PartiallySerializedBlock[T], (Long, Long)] = {
       assert(blockInfoManager.lockNewBlockForWriting(
         blockId,
         new BlockInfo(StorageLevel.MEMORY_ONLY_SER, classTag, tellMaster = false)))
@@ -354,7 +354,7 @@ class MemoryStoreSuite
 
     def putIteratorAsValues(
         blockId: BlockId,
-        iter: Iterator[Any]): Either[PartiallyUnrolledIterator[Any], Long] = {
+        iter: Iterator[Any]): Either[PartiallyUnrolledIterator[Any], (Long, Long)] = {
        memoryStore.putIteratorAsValues(blockId, iter, ClassTag.Any)
     }
 

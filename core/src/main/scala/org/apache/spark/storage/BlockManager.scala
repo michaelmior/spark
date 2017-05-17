@@ -1047,13 +1047,16 @@ private[spark] class BlockManager(
       var iteratorFromFailedMemoryStorePut: Option[PartiallyUnrolledIterator[T]] = None
       // Size of the block in bytes
       var size = 0L
+      // Compute time for the block in ms
+      var computeTime = 0L
       if (level.useMemory) {
         // Put it in memory first, even if it also has useDisk set to true;
         // We will drop it to disk later if the memory store can't hold it.
         if (level.deserialized) {
           memoryStore.putIteratorAsValues(blockId, iterator(), classTag) match {
             case Right(s) =>
-              size = s
+              size = s._1
+              computeTime = s._2
             case Left(iter) =>
               // Not enough space to unroll this block; drop to disk if applicable
               if (level.useDisk) {
@@ -1070,7 +1073,8 @@ private[spark] class BlockManager(
         } else { // !level.deserialized
           memoryStore.putIteratorAsBytes(blockId, iterator(), classTag, level.memoryMode) match {
             case Right(s) =>
-              size = s
+              size = s._1
+              computeTime = s._2
             case Left(partiallySerializedValues) =>
               // Not enough space to unroll this block; drop to disk if applicable
               if (level.useDisk) {
@@ -1089,7 +1093,7 @@ private[spark] class BlockManager(
       } else if (level.useDisk) {
         diskStore.put(blockId) { channel =>
           val out = Channels.newOutputStream(channel)
-          serializerManager.dataSerializeStream(blockId, out, iterator())(classTag)
+          computeTime = serializerManager.dataSerializeStream(blockId, out, iterator())(classTag)
         }
         size = diskStore.getSize(blockId)
       }
@@ -1099,6 +1103,7 @@ private[spark] class BlockManager(
       if (blockWasSuccessfullyStored) {
         // Now that the block is in either the memory or disk store, tell the master about it.
         info.size = size
+        info.computeTime = computeTime
         if (tellMaster && info.tellMaster) {
           reportBlockStatus(blockId, putBlockStatus)
         }

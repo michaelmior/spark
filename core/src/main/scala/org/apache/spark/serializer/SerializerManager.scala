@@ -163,11 +163,15 @@ private[spark] class SerializerManager(
   def dataSerializeStream[T: ClassTag](
       blockId: BlockId,
       outputStream: OutputStream,
-      values: Iterator[T]): Unit = {
+      values: Iterator[T]): Long = {
     val byteStream = new BufferedOutputStream(outputStream)
     val autoPick = !blockId.isInstanceOf[StreamBlockId]
     val ser = getSerializer(implicitly[ClassTag[T]], autoPick).newInstance()
-    ser.serializeStream(wrapForCompression(blockId, byteStream)).writeAll(values).close()
+    val stream = ser.serializeStream(wrapForCompression(blockId, byteStream)).writeAll(values)
+
+    val computedTime = stream.getComputedTime
+    stream.close()
+    computedTime
   }
 
   /** Serializes into a chunked byte buffer. */

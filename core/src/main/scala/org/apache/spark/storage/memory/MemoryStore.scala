@@ -179,7 +179,7 @@ private[spark] class MemoryStore(
   private[storage] def putIteratorAsValues[T](
       blockId: BlockId,
       values: Iterator[T],
-      classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], Long] = {
+      classTag: ClassTag[T]): Either[PartiallyUnrolledIterator[T], (Long, Long)] = {
 
     require(!contains(blockId), s"Block $blockId is already present in the MemoryStore")
 
@@ -199,6 +199,8 @@ private[spark] class MemoryStore(
     var unrollMemoryUsedByThisBlock = 0L
     // Underlying vector for unrolling the block
     var vector = new SizeTrackingVector[T]()(classTag)
+    // Total compute time for all values in iterator
+    var computeTime = 0L
 
     // Request enough memory to begin unrolling
     keepUnrolling =
@@ -213,7 +215,11 @@ private[spark] class MemoryStore(
 
     // Unroll this block safely, checking whether we have exceeded our threshold periodically
     while (values.hasNext && keepUnrolling) {
-      vector += values.next()
+      val startTime = System.currentTimeMillis
+      val next = values.next()
+      computeTime += System.currentTimeMillis - startTime
+      vector += next
+
       if (elementsUnrolled % memoryCheckPeriod == 0) {
         // If our vector's size has exceeded the threshold, request more memory
         val currentSize = vector.estimateSize()
@@ -271,7 +277,7 @@ private[spark] class MemoryStore(
         }
         logInfo("Block %s stored as values in memory (estimated size %s, free %s)".format(
           blockId, Utils.bytesToString(size), Utils.bytesToString(maxMemory - blocksMemoryUsed)))
-        Right(size)
+        Right((size, computeTime))
       } else {
         assert(currentUnrollMemoryForThisTask >= unrollMemoryUsedByThisBlock,
           "released too much unroll memory")
@@ -314,7 +320,7 @@ private[spark] class MemoryStore(
       blockId: BlockId,
       values: Iterator[T],
       classTag: ClassTag[T],
-      memoryMode: MemoryMode): Either[PartiallySerializedBlock[T], Long] = {
+      memoryMode: MemoryMode): Either[PartiallySerializedBlock[T], (Long, Long)] = {
 
     require(!contains(blockId), s"Block $blockId is already present in the MemoryStore")
 
@@ -346,6 +352,7 @@ private[spark] class MemoryStore(
       val ser = serializerManager.getSerializer(classTag, autoPick).newInstance()
       ser.serializeStream(serializerManager.wrapForCompression(blockId, redirectableStream))
     }
+    var computeTime = 0L
 
     // Request enough memory to begin unrolling
     keepUnrolling = reserveUnrollMemoryForThisTask(blockId, initialMemoryThreshold, memoryMode)
@@ -369,7 +376,11 @@ private[spark] class MemoryStore(
 
     // Unroll this block safely, checking whether we have exceeded our threshold
     while (values.hasNext && keepUnrolling) {
-      serializationStream.writeObject(values.next())(classTag)
+      val startTime = System.currentTimeMillis
+      val next = values.next()
+      computeTime += System.currentTimeMillis - startTime
+
+      serializationStream.writeObject(next)(classTag)
       reserveAdditionalMemoryIfNecessary()
     }
 
@@ -395,7 +406,7 @@ private[spark] class MemoryStore(
       logInfo("Block %s stored as bytes in memory (estimated size %s, free %s)".format(
         blockId, Utils.bytesToString(entry.size),
         Utils.bytesToString(maxMemory - blocksMemoryUsed)))
-      Right(entry.size)
+      Right((entry.size, computeTime))
     } else {
       // We ran out of space while unrolling the values for this block
       logUnrollFailureMessage(blockId, bbos.size)

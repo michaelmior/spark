@@ -135,9 +135,18 @@ abstract class SerializationStream extends Closeable {
   def flush(): Unit
   override def close(): Unit
 
+  private var computedTime: Long = 0
+  private var computedCount: Long = 0
+
+  def getComputedTime = computedTime
+
   def writeAll[T: ClassTag](iter: Iterator[T]): SerializationStream = {
     while (iter.hasNext) {
-      writeObject(iter.next())
+      val startTime = System.currentTimeMillis
+      val next = iter.next()
+      computedTime += System.currentTimeMillis - startTime
+      computedCount += 1
+      writeObject(next)
     }
     this
   }

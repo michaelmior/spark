@@ -58,6 +58,16 @@ private[storage] class BlockInfo(
   private[this] var _size: Long = 0
 
   /**
+   * The time to compute this block (in ms)
+   */
+  def computeTime: Long = _computeTime
+  def computeTime_=(t: Long): Unit = {
+    _computeTime = t
+    checkInvariants()
+  }
+  private[this] var _computeTime: Long = 0
+
+  /**
    * The number of times that this block has been locked for reading.
    */
   def readerCount: Int = _readerCount
