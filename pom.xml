@@ -153,7 +153,7 @@
     <httpclient.classic.version>3.1</httpclient.classic.version>
     <commons.math3.version>3.4.1</commons.math3.version>
     <!-- managed up from 3.2.1 for SPARK-11652 -->
-    <commons.collections.version>3.2.2</commons.collections.version>
+    <commons.collections.version>4.1</commons.collections.version>
     <scala.version>2.11.8</scala.version>
     <scala.binary.version>2.11</scala.binary.version>
     <codehaus.jackson.version>1.9.13</codehaus.jackson.version>
@@ -407,8 +407,8 @@
         <version>${commons.math3.version}</version>
       </dependency>
       <dependency>
-        <groupId>commons-collections</groupId>
-        <artifactId>commons-collections</artifactId>
+        <groupId>org.apache.commons</groupId>
+        <artifactId>commons-collections4</artifactId>
         <version>${commons.collections.version}</version>
       </dependency>
       <dependency>
