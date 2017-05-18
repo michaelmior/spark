@@ -135,6 +135,13 @@ private[storage] class BlockInfoManager extends Logging {
   private[this] val infos = new mutable.HashMap[BlockId, BlockInfo]
 
   /**
+   * Updated along with [[infos]] to allow finding the block with lowest cost
+   */
+  @GuardedBy("this")
+  private[this] val infosByCost =
+    new mutable.TreeSet[(BlockId, BlockInfo)]()(Ordering.by[(BlockId, BlockInfo), Long](_._2.computeTime))
+
+  /**
    * Tracks the set of blocks that each task has locked for writing.
    */
   @GuardedBy("this")
@@ -387,6 +394,7 @@ private[storage] class BlockInfoManager extends Logging {
       case None =>
         // Block does not yet exist or is removed, so we are free to acquire the write lock
         infos(blockId) = newBlockInfo
+        infosByCost.add((blockId, newBlockInfo))
         if (blockId.isRDD) {
           val rddBlockId = blockId.asRDDId.get
           rddBlocks.addBinding(rddBlockId.rddId, rddBlockId)
@@ -493,6 +501,7 @@ private[storage] class BlockInfoManager extends Logging {
             s"Task $currentTaskAttemptId called remove() on block $blockId without a write lock")
         } else {
           infos.remove(blockId)
+          infosByCost.remove((blockId, blockInfo))
           if (blockId.isRDD) {
             val rddBlockId = blockId.asRDDId.get
             rddBlocks.removeBinding(rddBlockId.rddId, rddBlockId)
@@ -528,6 +537,7 @@ private[storage] class BlockInfoManager extends Logging {
       blockInfo.writerTask = BlockInfo.NO_WRITER
     }
     infos.clear()
+    infosByCost.clear()
     rddBlocks.clear()
     readLocksByTask.clear()
     writeLocksByTask.clear()
