@@ -481,6 +481,13 @@ private[storage] class BlockInfoManager extends Logging {
   }
 
   /**
+   * Produces blocks which may be stored in memory in order by ascending recomputation cost.
+   */
+  def memoryBlocksByCost(): Iterator[BlockId] = synchronized {
+    infosByCost.iterator.filter(_._2.level.useMemory).map(_._1)
+  }
+
+  /**
    * Returns an iterator over a snapshot of blocks stored for a given RDD.
    */
   def getBlocksForRdd(rddId: Int): Iterator[RDDBlockId] = {
