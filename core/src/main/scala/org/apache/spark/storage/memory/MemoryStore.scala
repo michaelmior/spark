@@ -19,16 +19,18 @@ package org.apache.spark.storage.memory
 
 import java.io.OutputStream
 import java.nio.ByteBuffer
-import java.util.LinkedHashMap
+import java.util.{AbstractMap, LinkedHashMap, Locale, Map}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
 import com.google.common.io.ByteStreams
 
-import org.apache.spark.{SparkConf, TaskContext}
+import org.apache.spark.{SparkConf, SparkException, TaskContext}
 import org.apache.spark.internal.Logging
+import org.apache.spark.storage.memory.EvictionPolicy.EvictionPolicy
 import org.apache.spark.memory.{MemoryManager, MemoryMode}
 import org.apache.spark.serializer.{SerializationStream, SerializerManager}
 import org.apache.spark.storage.{BlockId, BlockInfoManager, StorageLevel, StreamBlockId}
@@ -84,6 +86,8 @@ private[spark] class MemoryStore(
     blockEvictionHandler: BlockEvictionHandler)
   extends Logging {
 
+  val EVICTION_POLICY_PROPERTY = "spark.storage.evictionPolicy"
+
   // Note: all changes to memory allocations, notably putting blocks, evicting blocks, and
   // acquiring or releasing unroll memory, must be synchronized on `memoryManager`!
 
@@ -129,6 +133,15 @@ private[spark] class MemoryStore(
       entries.get(blockId).size
     }
   }
+
+  private val evictionPolicyConf = conf.get(EVICTION_POLICY_PROPERTY, EvictionPolicy.LRU.toString)
+  val evictionPolicy: EvictionPolicy =
+    try {
+      EvictionPolicy.withName(evictionPolicyConf.toUpperCase(Locale.ROOT))
+    } catch {
+      case e: java.util.NoSuchElementException =>
+        throw new SparkException(s"Unrecognized $EVICTION_POLICY_PROPERTY: $evictionPolicyConf")
+    }
 
   /**
    * Use `size` to test if there is enough space in MemoryStore. If so, create the ByteBuffer and
@@ -510,19 +523,26 @@ private[spark] class MemoryStore(
       // (because of getValue or getBytes) while traversing the iterator, as that
       // can lead to exceptions.
       entries.synchronized {
-        val memoryBlocks = blockInfoManager.memoryBlocksByCost
+        val memoryBlocks: Iterator[Map.Entry[BlockId, MemoryEntry[_]]] = evictionPolicy match {
+          case EvictionPolicy.LRU => entries.entrySet().iterator().asScala
+          case EvictionPolicy.COST => blockInfoManager.memoryBlocksByCost.filter((blockId: BlockId) => {
+            entries.containsKey(blockId)
+          }).map((blockId: BlockId) => {
+            new AbstractMap.SimpleImmutableEntry[BlockId, MemoryEntry[_]](blockId, entries.get(blockId))
+          })
+        }
+
         while (memoryBlocks.hasNext && freedMemory < space) {
-          val blockId = memoryBlocks.next
-          if (entries.containsKey(blockId)) {
-            val entry = entries.get(blockId)
-            if (blockIsEvictable(blockId, entry)) {
-              // We don't want to evict blocks which are currently being read, so we need to obtain
-              // an exclusive write lock on blocks which are candidates for eviction. We perform a
-              // non-blocking "tryLock" here in order to ignore blocks which are locked for reading:
-              if (blockInfoManager.lockForWriting(blockId, blocking = false).isDefined) {
-                selectedBlocks += blockId
-                freedMemory += entry.size
-              }
+          val pair = memoryBlocks.next
+          val blockId = pair.getKey
+          val entry = pair.getValue
+          if (blockIsEvictable(blockId, entry)) {
+            // We don't want to evict blocks which are currently being read, so we need to obtain
+            // an exclusive write lock on blocks which are candidates for eviction. We perform a
+            // non-blocking "tryLock" here in order to ignore blocks which are locked for reading:
+            if (blockInfoManager.lockForWriting(blockId, blocking = false).isDefined) {
+              selectedBlocks += blockId
+              freedMemory += entry.size
             }
           }
         }

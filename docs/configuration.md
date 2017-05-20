@@ -1029,6 +1029,15 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
+  <td><code>spark.storage.evictionPolicy</code></td>
+  <td>LRU</td>
+  <td>
+    The cache eviction policy used with memory storage. This can be set to
+    <code>COST</code> to evict blocks based with the lowest estimated cost of
+    recomputation.
+  </td>
+</tr>
+<tr>
   <td><code>spark.storage.replication.proactive<code></td>
   <td>false</td>
   <td>
