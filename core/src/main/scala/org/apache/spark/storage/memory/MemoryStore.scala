@@ -35,7 +35,7 @@ import org.apache.spark.memory.{MemoryManager, MemoryMode}
 import org.apache.spark.serializer.{SerializationStream, SerializerManager}
 import org.apache.spark.storage.{BlockId, BlockInfoManager, StorageLevel, StreamBlockId}
 import org.apache.spark.unsafe.Platform
-import org.apache.spark.util.{SizeEstimator, Utils}
+import org.apache.spark.util.{Clock, SizeEstimator, SystemClock, Utils}
 import org.apache.spark.util.collection.SizeTrackingVector
 import org.apache.spark.util.io.{ChunkedByteBuffer, ChunkedByteBufferOutputStream}
 
@@ -83,7 +83,8 @@ private[spark] class MemoryStore(
     blockInfoManager: BlockInfoManager,
     serializerManager: SerializerManager,
     memoryManager: MemoryManager,
-    blockEvictionHandler: BlockEvictionHandler)
+    blockEvictionHandler: BlockEvictionHandler,
+    clock: Clock = new SystemClock())
   extends Logging {
 
   val EVICTION_POLICY_PROPERTY = "spark.storage.evictionPolicy"
@@ -228,9 +229,9 @@ private[spark] class MemoryStore(
 
     // Unroll this block safely, checking whether we have exceeded our threshold periodically
     while (values.hasNext && keepUnrolling) {
-      val startTime = System.currentTimeMillis
+      val startTime = clock.getTimeMillis
       val next = values.next()
-      computeTime += System.currentTimeMillis - startTime
+      computeTime += clock.getTimeMillis - startTime
       vector += next
 
       if (elementsUnrolled % memoryCheckPeriod == 0) {
@@ -389,9 +390,9 @@ private[spark] class MemoryStore(
 
     // Unroll this block safely, checking whether we have exceeded our threshold
     while (values.hasNext && keepUnrolling) {
-      val startTime = System.currentTimeMillis
+      val startTime = clock.getTimeMillis
       val next = values.next()
-      computeTime += System.currentTimeMillis - startTime
+      computeTime += clock.getTimeMillis - startTime
 
       serializationStream.writeObject(next)(classTag)
       reserveAdditionalMemoryIfNecessary()

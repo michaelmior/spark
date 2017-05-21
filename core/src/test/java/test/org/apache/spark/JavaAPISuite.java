@@ -39,6 +39,7 @@ import org.apache.spark.Partitioner;
 import org.apache.spark.SparkConf;
 import org.apache.spark.TaskContext;
 import org.apache.spark.TaskContext$;
+import org.apache.spark.util.SystemClock;
 import scala.Tuple2;
 import scala.Tuple3;
 import scala.Tuple4;
@@ -1282,7 +1283,7 @@ public class JavaAPISuite implements Serializable {
         mergeValueFunction,
         defaultPartitioner,
         false,
-        new KryoSerializer(new SparkConf()));
+        new KryoSerializer(new SparkConf(), new SystemClock()));
     results = combinedRDD.collectAsMap();
     assertEquals(expected, results);
   }

@@ -53,6 +53,7 @@ import org.apache.spark.security.CryptoStreamUtils;
 import org.apache.spark.serializer.*;
 import org.apache.spark.shuffle.IndexShuffleBlockResolver;
 import org.apache.spark.storage.*;
+import org.apache.spark.util.SystemClock;
 import org.apache.spark.util.Utils;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -73,7 +74,7 @@ public class UnsafeShuffleWriterSuite {
   long[] partitionSizesInMergedFile;
   final LinkedList<File> spillFilesCreated = new LinkedList<>();
   SparkConf conf;
-  final Serializer serializer = new KryoSerializer(new SparkConf());
+  final Serializer serializer = new KryoSerializer(new SparkConf(), new SystemClock());
   TaskMetrics taskMetrics;
 
   @Mock(answer = RETURNS_SMART_NULLS) BlockManager blockManager;

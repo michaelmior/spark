@@ -67,6 +67,7 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
   val bcastManager = new BroadcastManager(true, new SparkConf(false), securityMgr)
   val mapOutputTracker = new MapOutputTrackerMaster(new SparkConf(false), bcastManager, true)
   val shuffleManager = new SortShuffleManager(new SparkConf(false))
+  val clock = new ManualClock()
 
   // Reuse a serializer across tests to avoid creating a new thread-local buffer on each test
   val serializer = new KryoSerializer(new SparkConf(false).set("spark.kryoserializer.buffer", "1m"))
@@ -84,7 +85,7 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     val bmConf = testConf.map(_.setAll(conf.getAll)).getOrElse(conf)
     bmConf.set("spark.testing.memory", maxMem.toString)
     bmConf.set("spark.memory.offHeap.size", maxMem.toString)
-    val serializer = new KryoSerializer(bmConf)
+    val serializer = new KryoSerializer(bmConf, clock = clock)
     val encryptionKey = if (bmConf.get(IO_ENCRYPTION_ENABLED)) {
       Some(CryptoStreamUtils.createKey(bmConf))
     } else {
@@ -96,7 +97,7 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     val memManager = UnifiedMemoryManager(bmConf, numCores = 1)
     val serializerManager = new SerializerManager(serializer, bmConf)
     val blockManager = new BlockManager(name, rpcEnv, master, serializerManager, bmConf,
-      memManager, mapOutputTracker, shuffleManager, transfer, bmSecurityMgr, 0)
+      memManager, mapOutputTracker, shuffleManager, transfer, bmSecurityMgr, 0, clock)
     memManager.setMemoryStore(blockManager.memoryStore)
     blockManager.initialize("app-id")
     blockManager

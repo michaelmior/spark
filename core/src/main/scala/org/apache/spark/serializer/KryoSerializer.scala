@@ -40,7 +40,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.network.util.ByteUnit
 import org.apache.spark.scheduler.{CompressedMapStatus, HighlyCompressedMapStatus}
 import org.apache.spark.storage._
-import org.apache.spark.util.{BoundedPriorityQueue, SerializableConfiguration, SerializableJobConf, Utils}
+import org.apache.spark.util.{BoundedPriorityQueue, Clock, SerializableConfiguration, SerializableJobConf, SystemClock, Utils}
 import org.apache.spark.util.collection.CompactBuffer
 
 /**
@@ -51,7 +51,7 @@ import org.apache.spark.util.collection.CompactBuffer
  * Spark. It is intended to be used to serialize/de-serialize data within a single
  * Spark application.
  */
-class KryoSerializer(conf: SparkConf)
+class KryoSerializer(conf: SparkConf, clock: Clock = new SystemClock())
   extends org.apache.spark.serializer.Serializer
   with Logging
   with Serializable {
@@ -182,7 +182,7 @@ class KryoSerializer(conf: SparkConf)
   }
 
   override def newInstance(): SerializerInstance = {
-    new KryoSerializerInstance(this, useUnsafe)
+    new KryoSerializerInstance(this, useUnsafe, clock)
   }
 
   private[spark] override lazy val supportsRelocationOfSerializedObjects: Boolean = {
@@ -197,7 +197,8 @@ private[spark]
 class KryoSerializationStream(
     serInstance: KryoSerializerInstance,
     outStream: OutputStream,
-    useUnsafe: Boolean) extends SerializationStream {
+    useUnsafe: Boolean,
+    clock: Clock = new SystemClock()) extends SerializationStream(clock) {
 
   private[this] var output: KryoOutput =
     if (useUnsafe) new KryoUnsafeOutput(outStream) else new KryoOutput(outStream)
@@ -265,7 +266,7 @@ class KryoDeserializationStream(
   }
 }
 
-private[spark] class KryoSerializerInstance(ks: KryoSerializer, useUnsafe: Boolean)
+private[spark] class KryoSerializerInstance(ks: KryoSerializer, useUnsafe: Boolean, clock: Clock = new SystemClock())
   extends SerializerInstance {
   /**
    * A re-used [[Kryo]] instance. Methods will borrow this instance by calling `borrowKryo()`, do
@@ -346,7 +347,7 @@ private[spark] class KryoSerializerInstance(ks: KryoSerializer, useUnsafe: Boole
   }
 
   override def serializeStream(s: OutputStream): SerializationStream = {
-    new KryoSerializationStream(this, s, useUnsafe)
+    new KryoSerializationStream(this, s, useUnsafe, clock)
   }
 
   override def deserializeStream(s: InputStream): DeserializationStream = {

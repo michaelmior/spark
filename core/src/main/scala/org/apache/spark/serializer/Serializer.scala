@@ -24,7 +24,7 @@ import javax.annotation.concurrent.NotThreadSafe
 import scala.reflect.ClassTag
 
 import org.apache.spark.annotation.{DeveloperApi, Private}
-import org.apache.spark.util.NextIterator
+import org.apache.spark.util.{Clock, NextIterator, SystemClock}
 
 /**
  * :: DeveloperApi ::
@@ -125,7 +125,7 @@ abstract class SerializerInstance {
  * A stream for writing serialized objects.
  */
 @DeveloperApi
-abstract class SerializationStream extends Closeable {
+abstract class SerializationStream(clock: Clock = new SystemClock) extends Closeable {
   /** The most general-purpose method to write an object. */
   def writeObject[T: ClassTag](t: T): SerializationStream
   /** Writes the object representing the key of a key-value pair. */
@@ -142,9 +142,9 @@ abstract class SerializationStream extends Closeable {
 
   def writeAll[T: ClassTag](iter: Iterator[T]): SerializationStream = {
     while (iter.hasNext) {
-      val startTime = System.currentTimeMillis
+      val startTime = clock.getTimeMillis
       val next = iter.next()
-      computedTime += System.currentTimeMillis - startTime
+      computedTime += clock.getTimeMillis - startTime
       computedCount += 1
       writeObject(next)
     }

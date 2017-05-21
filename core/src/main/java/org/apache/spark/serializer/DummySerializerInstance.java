@@ -26,6 +26,7 @@ import scala.reflect.ClassTag;
 
 import org.apache.spark.annotation.Private;
 import org.apache.spark.unsafe.Platform;
+import org.apache.spark.util.SystemClock;
 
 /**
  * Unfortunately, we need a serializer instance in order to construct a DiskBlockObjectWriter.
@@ -42,7 +43,7 @@ public final class DummySerializerInstance extends SerializerInstance {
 
   @Override
   public SerializationStream serializeStream(final OutputStream s) {
-    return new SerializationStream() {
+    return new SerializationStream(new SystemClock()) {
       @Override
       public void flush() {
         // Need to implement this because DiskObjectWriter uses it to flush the compression stream

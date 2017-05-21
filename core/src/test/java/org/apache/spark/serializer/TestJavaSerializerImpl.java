@@ -23,6 +23,9 @@ import java.nio.ByteBuffer;
 
 import scala.reflect.ClassTag;
 
+import org.apache.spark.SparkConf;
+import org.apache.spark.util.SystemClock;
+
 
 /**
  * A simple Serializer implementation to make sure the API is Java-friendly.
@@ -62,6 +65,10 @@ class TestJavaSerializerImpl extends Serializer {
   }
 
   static class SerializationStreamImpl extends SerializationStream {
+
+    public SerializationStreamImpl() {
+      super(new SystemClock());
+    }
 
     @Override
     public <T> SerializationStream writeObject(T t, ClassTag<T> evidence$1) {

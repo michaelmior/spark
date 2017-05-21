@@ -118,7 +118,8 @@ private[spark] class BlockManager(
     shuffleManager: ShuffleManager,
     val blockTransferService: BlockTransferService,
     securityManager: SecurityManager,
-    numUsableCores: Int)
+    numUsableCores: Int,
+    clock: Clock = new SystemClock())
   extends BlockDataManager with BlockEvictionHandler with Logging {
 
   private[spark] val externalShuffleServiceEnabled =
@@ -139,7 +140,7 @@ private[spark] class BlockManager(
 
   // Actual storage of where blocks are kept
   private[spark] val memoryStore =
-    new MemoryStore(conf, blockInfoManager, serializerManager, memoryManager, this)
+    new MemoryStore(conf, blockInfoManager, serializerManager, memoryManager, this, clock)
   private[spark] val diskStore = new DiskStore(conf, diskBlockManager, securityManager)
   memoryManager.setMemoryStore(memoryStore)
 
