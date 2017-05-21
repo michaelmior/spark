@@ -559,6 +559,33 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
       === Seq(localRack, localRack, localRack, otherRack, otherRack))
   }
 
+  test("evict lowest cost blocks with cost-based eviction") {
+    conf.set("spark.storage.evictionPolicy", "COST")
+
+    store = makeBlockManager(2000, "executor")
+    val a1 = (1 to 1).view.map(_ => {
+      Thread.sleep(100)
+      new Array[Byte](500)
+    })
+    val a2 = (1 to 1).toStream.view.map(_ => {
+      new Array[Byte](500)
+    })
+    val a3 = (1 to 1).toStream.view.map(_ => {
+      Thread.sleep(50)
+      new Array[Byte](500)
+    })
+
+    // Insert a1, a2, and a3 in memory
+    store.putIterator("a1", a1.iterator, StorageLevel.MEMORY_ONLY)
+    store.putIterator("a2", a2.iterator, StorageLevel.MEMORY_ONLY)
+    store.putIterator("a3", a3.iterator, StorageLevel.MEMORY_ONLY)
+
+    // Only a1 and a3 should stay in memory because a1 has higher cost
+    assert(store.memoryStore.contains("a1"), "a1 was not in memory store")
+    assert(!store.memoryStore.contains("a2"), "a2 was in memory store")
+    assert(store.memoryStore.contains("a3"), "a3 was not in memory store")
+  }
+
   test("SPARK-9591: getRemoteBytes from another location when Exception throw") {
     conf.set("spark.shuffle.io.maxRetries", "0")
     store = makeBlockManager(8000, "executor1")

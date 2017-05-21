@@ -45,7 +45,7 @@ import org.apache.spark.internal.Logging
 private[storage] class BlockInfo(
     var level: StorageLevel,
     val classTag: ClassTag[_],
-    val tellMaster: Boolean) {
+    val tellMaster: Boolean) extends Ordered[BlockInfo] {
 
   /**
    * The size of the block (in bytes)
@@ -97,6 +97,10 @@ private[storage] class BlockInfo(
   }
 
   checkInvariants()
+
+  def compare(that: BlockInfo) = {
+    (computeTime - that.computeTime).toInt
+  }
 }
 
 private[storage] object BlockInfo {
@@ -139,7 +143,7 @@ private[storage] class BlockInfoManager extends Logging {
    */
   @GuardedBy("this")
   private[this] val infosByCost =
-    new mutable.TreeSet[(BlockId, BlockInfo)]()(Ordering.by[(BlockId, BlockInfo), Long](_._2.computeTime))
+    new mutable.TreeSet[(BlockId, BlockInfo)]()(Ordering.by[(BlockId, BlockInfo), BlockInfo](_._2))
 
   /**
    * Tracks the set of blocks that each task has locked for writing.
