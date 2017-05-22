@@ -563,17 +563,15 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
   test("evict lowest cost blocks with cost-based eviction") {
     conf.set("spark.storage.evictionPolicy", "COST")
 
-    store = makeBlockManager(2000, "executor")
+    store = makeBlockManager(6000)
     val a1 = (1 to 1).view.map(_ => {
-      Thread.sleep(100)
-      new Array[Byte](500)
+      clock.advance(1000)
+      new Array[Byte](2000)
     })
-    val a2 = (1 to 1).toStream.view.map(_ => {
-      new Array[Byte](500)
-    })
-    val a3 = (1 to 1).toStream.view.map(_ => {
-      Thread.sleep(50)
-      new Array[Byte](500)
+    val a2 = List(new Array[Byte](2000))
+    val a3 = (1 to 1).view.map(_ => {
+      clock.advance(2000)
+      new Array[Byte](2000)
     })
 
     // Insert a1, a2, and a3 in memory

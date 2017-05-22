@@ -142,8 +142,7 @@ private[storage] class BlockInfoManager extends Logging {
    * Updated along with [[infos]] to allow finding the block with lowest cost
    */
   @GuardedBy("this")
-  private[this] val infosByCost =
-    new mutable.TreeSet[(BlockId, BlockInfo)]()(Ordering.by[(BlockId, BlockInfo), BlockInfo](_._2))
+  private[this] val infosByCost = new mutable.TreeSet[(BlockInfo, BlockId)]()
 
   /**
    * Tracks the set of blocks that each task has locked for writing.
@@ -398,7 +397,7 @@ private[storage] class BlockInfoManager extends Logging {
       case None =>
         // Block does not yet exist or is removed, so we are free to acquire the write lock
         infos(blockId) = newBlockInfo
-        infosByCost.add((blockId, newBlockInfo))
+        infosByCost.add((newBlockInfo, blockId))
         if (blockId.isRDD) {
           val rddBlockId = blockId.asRDDId.get
           rddBlocks.addBinding(rddBlockId.rddId, rddBlockId)
@@ -488,7 +487,7 @@ private[storage] class BlockInfoManager extends Logging {
    * Produces blocks which may be stored in memory in order by ascending recomputation cost.
    */
   def memoryBlocksByCost(): Iterator[BlockId] = synchronized {
-    infosByCost.iterator.filter(_._2.level.useMemory).map(_._1)
+    infosByCost.iterator.filter(_._1.level.useMemory).map(_._2)
   }
 
   /**
@@ -512,7 +511,7 @@ private[storage] class BlockInfoManager extends Logging {
             s"Task $currentTaskAttemptId called remove() on block $blockId without a write lock")
         } else {
           infos.remove(blockId)
-          infosByCost.remove((blockId, blockInfo))
+          infosByCost.remove((blockInfo, blockId))
           if (blockId.isRDD) {
             val rddBlockId = blockId.asRDDId.get
             rddBlocks.removeBinding(rddBlockId.rddId, rddBlockId)

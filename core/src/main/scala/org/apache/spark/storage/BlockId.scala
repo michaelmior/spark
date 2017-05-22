@@ -30,7 +30,7 @@ import org.apache.spark.annotation.DeveloperApi
  * If your BlockId should be serializable, be sure to add it to the BlockId.apply() method.
  */
 @DeveloperApi
-sealed abstract class BlockId {
+sealed abstract class BlockId extends Ordered[BlockId] {
   /** A globally unique identifier for this Block. Can be used for ser/de. */
   def name: String
 
@@ -45,6 +45,9 @@ sealed abstract class BlockId {
   override def equals(other: Any): Boolean = other match {
     case o: BlockId => getClass == o.getClass && name.equals(o.name)
     case _ => false
+  }
+  override def compare(other: BlockId): Int = {
+    name.compare(other.name)
   }
 }
 
