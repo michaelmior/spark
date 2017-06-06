@@ -228,9 +228,13 @@ private[spark] class MemoryStore(
     }
 
     // Unroll this block safely, checking whether we have exceeded our threshold periodically
-    while (values.hasNext && keepUnrolling) {
-      val startTime = clock.getTimeMillis
+    var startTime = clock.getTimeMillis
+    var hasNext = values.hasNext
+    computeTime += clock.getTimeMillis - startTime
+    while (hasNext && keepUnrolling) {
+      startTime = clock.getTimeMillis
       val next = values.next()
+      hasNext = values.hasNext
       computeTime += clock.getTimeMillis - startTime
       vector += next
 
@@ -389,9 +393,13 @@ private[spark] class MemoryStore(
     }
 
     // Unroll this block safely, checking whether we have exceeded our threshold
-    while (values.hasNext && keepUnrolling) {
-      val startTime = clock.getTimeMillis
+    var startTime = clock.getTimeMillis
+    var hasNext = values.hasNext
+    computeTime += clock.getTimeMillis - startTime
+    while (hasNext && keepUnrolling) {
+      startTime = clock.getTimeMillis
       val next = values.next()
+      hasNext = values.hasNext
       computeTime += clock.getTimeMillis - startTime
 
       serializationStream.writeObject(next)(classTag)
