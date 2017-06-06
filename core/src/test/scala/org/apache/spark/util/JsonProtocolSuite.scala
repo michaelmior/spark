@@ -1155,7 +1155,8 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Replication": 2
       |          },
       |          "Memory Size": 0,
-      |          "Disk Size": 0
+      |          "Disk Size": 0,
+      |          "Cost": 0
       |        }
       |      }
       |    ]
@@ -1255,7 +1256,8 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Replication": 2
       |          },
       |          "Memory Size": 0,
-      |          "Disk Size": 0
+      |          "Disk Size": 0,
+      |          "Cost": 0
       |        }
       |      }
       |    ]
@@ -1355,7 +1357,8 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |            "Replication": 2
       |          },
       |          "Memory Size": 0,
-      |          "Disk Size": 0
+      |          "Disk Size": 0,
+      |          "Cost": 0
       |        }
       |      }
       |    ]
@@ -1885,7 +1888,8 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |                  "Replication": 2
       |                },
       |                "Memory Size": 0,
-      |                "Disk Size": 0
+      |                "Disk Size": 0,
+      |                "Cost": 0
       |              }
       |            }
       |          ],

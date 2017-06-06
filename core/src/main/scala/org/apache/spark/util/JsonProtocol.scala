@@ -448,7 +448,8 @@ private[spark] object JsonProtocol {
     val storageLevel = storageLevelToJson(blockStatus.storageLevel)
     ("Storage Level" -> storageLevel) ~
     ("Memory Size" -> blockStatus.memSize) ~
-    ("Disk Size" -> blockStatus.diskSize)
+    ("Disk Size" -> blockStatus.diskSize) ~
+    ("Cost" -> blockStatus.cost)
   }
 
   def executorInfoToJson(executorInfo: ExecutorInfo): JValue = {
@@ -976,7 +977,8 @@ private[spark] object JsonProtocol {
     val storageLevel = storageLevelFromJson(json \ "Storage Level")
     val memorySize = (json \ "Memory Size").extract[Long]
     val diskSize = (json \ "Disk Size").extract[Long]
-    BlockStatus(storageLevel, memorySize, diskSize)
+    val cost = (json \ "Cost").extract[Long]
+    BlockStatus(storageLevel, memorySize, diskSize, cost)
   }
 
   def executorInfoFromJson(json: JValue): ExecutorInfo = {

@@ -75,8 +75,8 @@ class BlockManagerMasterEndpoint(
       context.reply(register(blockManagerId, maxOnHeapMemSize, maxOffHeapMemSize, slaveEndpoint))
 
     case _updateBlockInfo @
-        UpdateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size) =>
-      context.reply(updateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size))
+        UpdateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size, cost) =>
+      context.reply(updateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size, cost))
       listenerBus.post(SparkListenerBlockUpdated(BlockUpdatedInfo(_updateBlockInfo)))
 
     case GetLocations(blockId) =>
@@ -378,7 +378,8 @@ class BlockManagerMasterEndpoint(
       blockId: BlockId,
       storageLevel: StorageLevel,
       memSize: Long,
-      diskSize: Long): Boolean = {
+      diskSize: Long,
+      cost: Long): Boolean = {
 
     if (!blockManagerInfo.contains(blockManagerId)) {
       if (blockManagerId.isDriver && !isLocal) {
@@ -395,7 +396,7 @@ class BlockManagerMasterEndpoint(
       return true
     }
 
-    blockManagerInfo(blockManagerId).updateBlockInfo(blockId, storageLevel, memSize, diskSize)
+    blockManagerInfo(blockManagerId).updateBlockInfo(blockId, storageLevel, memSize, diskSize, cost)
 
     var locations: mutable.HashSet[BlockManagerId] = null
     if (blockLocations.containsKey(blockId)) {
@@ -455,13 +456,13 @@ class BlockManagerMasterEndpoint(
 }
 
 @DeveloperApi
-case class BlockStatus(storageLevel: StorageLevel, memSize: Long, diskSize: Long) {
+case class BlockStatus(storageLevel: StorageLevel, memSize: Long, diskSize: Long, cost: Long = 0) {
   def isCached: Boolean = memSize + diskSize > 0
 }
 
 @DeveloperApi
 object BlockStatus {
-  def empty: BlockStatus = BlockStatus(StorageLevel.NONE, memSize = 0L, diskSize = 0L)
+  def empty: BlockStatus = BlockStatus(StorageLevel.NONE, memSize = 0L, diskSize = 0L, cost = 0L)
 }
 
 private[spark] class BlockManagerInfo(
@@ -493,7 +494,8 @@ private[spark] class BlockManagerInfo(
       blockId: BlockId,
       storageLevel: StorageLevel,
       memSize: Long,
-      diskSize: Long) {
+      diskSize: Long,
+      cost: Long) {
 
     updateLastSeenMs()
 
@@ -523,7 +525,7 @@ private[spark] class BlockManagerInfo(
        * Therefore, a safe way to set BlockStatus is to set its info in accurate modes. */
       var blockStatus: BlockStatus = null
       if (storageLevel.useMemory) {
-        blockStatus = BlockStatus(storageLevel, memSize = memSize, diskSize = 0)
+        blockStatus = BlockStatus(storageLevel, memSize = memSize, diskSize = 0, cost = cost)
         _blocks.put(blockId, blockStatus)
         _remainingMem -= memSize
         if (blockExists) {
@@ -538,7 +540,7 @@ private[spark] class BlockManagerInfo(
         }
       }
       if (storageLevel.useDisk) {
-        blockStatus = BlockStatus(storageLevel, memSize = 0, diskSize = diskSize)
+        blockStatus = BlockStatus(storageLevel, memSize = 0, diskSize = diskSize, cost = cost)
         _blocks.put(blockId, blockStatus)
         if (blockExists) {
           logInfo(s"Updated $blockId on disk on ${blockManagerId.hostPort}" +
