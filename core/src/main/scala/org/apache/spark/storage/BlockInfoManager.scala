@@ -98,8 +98,10 @@ private[storage] class BlockInfo(
 
   checkInvariants()
 
+  def cost: Long = _computeTime
+
   def compare(that: BlockInfo) = {
-    (computeTime - that.computeTime).toInt
+    (cost - that.cost).toInt
   }
 }
 
