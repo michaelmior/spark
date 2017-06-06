@@ -560,6 +560,33 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
       === Seq(localRack, localRack, localRack, otherRack, otherRack))
   }
 
+  test("store block cost as computation time") {
+    store = makeBlockManager(5000)
+    val a1 = (1 to 1).view.map(_ => {
+      clock.advance(1000)
+      new Array[Byte](500)
+    })
+
+    val a2 = (1 to 1).view.map(_ => {
+      clock.advance(1000)
+      new Array[Byte](500)
+    })
+
+    // Insert a1 and a2 in memory
+    store.putIterator("a1", a1.iterator, StorageLevel.MEMORY_ONLY)
+    store.putIterator("a2", a1.iterator, StorageLevel.MEMORY_ONLY_SER)
+
+    assert(store.memoryStore.contains("a1"), "a1 was not in memory store")
+    assert(store.memoryStore.contains("a2"), "a2 was not in memory store")
+
+    store.blockInfoManager.lockForReading("a1").foreach { info =>
+      assert(info.cost == 1000)
+    }
+    store.blockInfoManager.lockForReading("a2").foreach { info =>
+      assert(info.cost == 1000)
+    }
+  }
+
   test("evict lowest cost blocks with cost-based eviction") {
     conf.set("spark.storage.evictionPolicy", "COST")
 
