@@ -24,7 +24,7 @@ package org.apache.spark.util
  *
  * @param time initial time (in milliseconds since the epoch)
  */
-private[spark] class ManualClock(private var time: Long) extends Clock {
+private[spark] class ManualClock(private var time: Long) extends Clock with Serializable {
 
   /**
    * @return `ManualClock` with initial time 0
