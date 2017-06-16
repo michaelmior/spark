@@ -141,9 +141,13 @@ abstract class SerializationStream(clock: Clock = new SystemClock) extends Close
   def getComputedTime = computedTime
 
   def writeAll[T: ClassTag](iter: Iterator[T]): SerializationStream = {
-    while (iter.hasNext) {
-      val startTime = clock.getTimeMillis
+    var startTime = clock.getTimeMillis
+    var hasNext = iter.hasNext
+    computedTime += clock.getTimeMillis - startTime
+    while (hasNext) {
+      startTime = clock.getTimeMillis
       val next = iter.next()
+      hasNext = iter.hasNext
       computedTime += clock.getTimeMillis - startTime
       computedCount += 1
       writeObject(next)
