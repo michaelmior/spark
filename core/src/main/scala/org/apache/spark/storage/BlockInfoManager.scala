@@ -496,7 +496,7 @@ private[storage] class BlockInfoManager extends Logging {
    * Returns an iterator over a snapshot of blocks stored for a given RDD.
    */
   def getBlocksForRdd(rddId: Int): Iterator[RDDBlockId] = {
-    rddBlocks(rddId).toArray.toIterator
+    rddBlocks.getOrElse(rddId, Seq.empty).toArray.toIterator
   }
 
   /**
