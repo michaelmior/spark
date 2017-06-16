@@ -27,6 +27,7 @@ import scala.reflect.ClassTag
 
 import org.apache.spark._
 import org.apache.spark.serializer.JavaSerializer
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.Utils
 
 private[spark] class ParallelCollectionPartition[T: ClassTag](
@@ -60,6 +61,7 @@ private[spark] class ParallelCollectionPartition[T: ClassTag](
       case _ =>
         out.writeLong(rddId)
         out.writeInt(slice)
+        out.writeObject(storageLevel)
 
         val ser = sfactory.newInstance()
         Utils.serializeViaNestedStream(out, ser)(_.writeObject(values))
@@ -75,6 +77,7 @@ private[spark] class ParallelCollectionPartition[T: ClassTag](
       case _ =>
         rddId = in.readLong()
         slice = in.readInt()
+        storageLevel = in.readObject.asInstanceOf[StorageLevel]
 
         val ser = sfactory.newInstance()
         Utils.deserializeViaNestedStream(in, ser)(ds => values = ds.readObject[Seq[T]]())
