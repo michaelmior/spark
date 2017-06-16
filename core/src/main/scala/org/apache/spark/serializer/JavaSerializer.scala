@@ -92,7 +92,7 @@ private object JavaDeserializationStream {
 }
 
 private[spark] class JavaSerializerInstance(
-    counterReset: Int, extraDebugInfo: Boolean, defaultClassLoader: ClassLoader)
+    counterReset: Int, extraDebugInfo: Boolean, defaultClassLoader: ClassLoader, clock: Clock = new SystemClock())
   extends SerializerInstance {
 
   override def serialize[T: ClassTag](t: T): ByteBuffer = {
@@ -137,15 +137,18 @@ private[spark] class JavaSerializerInstance(
  * Spark application.
  */
 @DeveloperApi
-class JavaSerializer(conf: SparkConf) extends Serializer with Externalizable {
+class JavaSerializer(conf: SparkConf, clock: Clock = new SystemClock()) extends Serializer with Externalizable {
   private var counterReset = conf.getInt("spark.serializer.objectStreamReset", 100)
   private var extraDebugInfo = conf.getBoolean("spark.serializer.extraDebugInfo", true)
+
+  // This is necessary to allow SparkEnv to construct an instance
+  def this(conf: SparkConf) = this(conf, new SystemClock())
 
   protected def this() = this(new SparkConf())  // For deserialization only
 
   override def newInstance(): SerializerInstance = {
     val classLoader = defaultClassLoader.getOrElse(Thread.currentThread.getContextClassLoader)
-    new JavaSerializerInstance(counterReset, extraDebugInfo, classLoader)
+    new JavaSerializerInstance(counterReset, extraDebugInfo, classLoader, clock)
   }
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {

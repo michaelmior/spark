@@ -56,6 +56,9 @@ class KryoSerializer(conf: SparkConf, clock: Clock = new SystemClock())
   with Logging
   with Serializable {
 
+  // This is necessary to allow SparkEnv to construct an instance
+  def this(conf: SparkConf) = this(conf, new SystemClock())
+
   private val bufferSizeKb = conf.getSizeAsKb("spark.kryoserializer.buffer", "64k")
 
   if (bufferSizeKb >= ByteUnit.GiB.toKiB(2)) {
