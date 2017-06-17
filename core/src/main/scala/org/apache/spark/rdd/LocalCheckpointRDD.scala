@@ -20,7 +20,7 @@ package org.apache.spark.rdd
 import scala.reflect.ClassTag
 
 import org.apache.spark.{Partition, SparkContext, SparkException, TaskContext}
-import org.apache.spark.storage.RDDBlockId
+import org.apache.spark.storage.{RDDBlockId, StorageLevel}
 
 /**
  * A dummy CheckpointRDD that exists to provide informative error messages during failures.
@@ -37,15 +37,20 @@ import org.apache.spark.storage.RDDBlockId
 private[spark] class LocalCheckpointRDD[T: ClassTag](
     sc: SparkContext,
     rddId: Int,
-    numPartitions: Int)
+    numPartitions: Int,
+    storageLevel: StorageLevel)
   extends CheckpointRDD[T](sc) {
 
   def this(rdd: RDD[T]) {
-    this(rdd.context, rdd.id, rdd.partitions.length)
+    this(rdd.context, rdd.id, rdd.partitions.length, rdd.getStorageLevel)
   }
 
   protected override def getPartitions: Array[Partition] = {
-    (0 until numPartitions).toArray.map { i => new CheckpointRDDPartition(i) }
+    (0 until numPartitions).toArray.map { i =>
+      val partition = new CheckpointRDDPartition(i)
+      partition.storageLevel = storageLevel
+      partition
+    }
   }
 
   /**
