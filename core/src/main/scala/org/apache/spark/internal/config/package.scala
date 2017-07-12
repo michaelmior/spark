@@ -41,6 +41,22 @@ package object config {
     .bytesConf(ByteUnit.MiB)
     .createWithDefaultString("1g")
 
+  private[spark] val EVENT_LOG_COMPRESS =
+    ConfigBuilder("spark.eventLog.compress").booleanConf.createWithDefault(false)
+
+  private[spark] val EVENT_LOG_BLOCK_UPDATES =
+    ConfigBuilder("spark.eventLog.blockUpdates").booleanConf.createWithDefault(false)
+
+  private[spark] val EVENT_LOG_TESTING =
+    ConfigBuilder("spark.eventLog.testing").booleanConf.createWithDefault(false)
+
+  private[spark] val EVENT_LOG_OUTPUT_BUFFER_SIZE = ConfigBuilder("spark.eventLog.buffer.kb")
+    .bytesConf(ByteUnit.KiB)
+    .createWithDefaultString("100k")
+
+  private[spark] val EVENT_LOG_OVERWRITE =
+    ConfigBuilder("spark.eventLog.overwrite").booleanConf.createWithDefault(false)
+
   private[spark] val EXECUTOR_CLASS_PATH =
     ConfigBuilder(SparkLauncher.EXECUTOR_EXTRA_CLASSPATH).stringConf.createOptional
 

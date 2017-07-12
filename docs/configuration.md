@@ -714,6 +714,13 @@ Apart from these, the following properties are also available, and may be useful
 <table class="table">
 <tr><th>Property Name</th><th>Default</th><th>Meaning</th></tr>
 <tr>
+  <td><code>spark.eventLog.blockUpdates</code></td>
+  <td>false</td>
+  <td>
+    Whether to log events for every block update, if <code>spark.eventLog.enabled</code> is true.
+  </td>
+</tr>
+<tr>
   <td><code>spark.eventLog.compress</code></td>
   <td>false</td>
   <td>
