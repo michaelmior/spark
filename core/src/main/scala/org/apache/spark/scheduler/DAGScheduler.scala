@@ -1535,6 +1535,16 @@ class DAGScheduler(
       logInfo("%s (%s) finished in %s s".format(stage, stage.name, serviceTime))
       stage.latestInfo.completionTime = Some(clock.getTimeMillis())
 
+      var rddSizes = new HashMap[Int, Option[(Int, Long, Long)]]()
+      rddSizes(stage.rdd.id) = stage.rdd.estimatedSize
+      stage.rdd.getNarrowAncestors.foreach { rdd =>
+        rddSizes(rdd.id) = rdd.estimatedSize
+      }
+
+      stage.latestInfo.rddInfos.foreach { info =>
+        info.estimatedSize = rddSizes(info.id)
+      }
+
       // Clear failure count for this stage, now that it's succeeded.
       // We only limit consecutive failures of stage attempts,so that if a stage is
       // re-used many times in a long-running job, unrelated failures don't eventually cause the

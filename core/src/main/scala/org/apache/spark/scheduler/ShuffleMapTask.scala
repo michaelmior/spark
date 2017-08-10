@@ -94,6 +94,7 @@ private[spark] class ShuffleMapTask(
       val manager = SparkEnv.get.shuffleManager
       writer = manager.getWriter[Any, Any](dep.shuffleHandle, partitionId, context)
       writer.write(rdd.iterator(partition, context).asInstanceOf[Iterator[_ <: Product2[Any, Any]]])
+      context.collectEstimatedRddSizes(rdd)
       writer.stop(success = true).get
     } catch {
       case e: Exception =>

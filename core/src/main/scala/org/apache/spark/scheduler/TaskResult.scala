@@ -20,7 +20,9 @@ package org.apache.spark.scheduler
 import java.io._
 import java.nio.ByteBuffer
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.Map
+import scala.collection.immutable
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.spark.SparkEnv
 import org.apache.spark.serializer.SerializerInstance
@@ -31,25 +33,40 @@ import org.apache.spark.util.{AccumulatorV2, Utils}
 private[spark] sealed trait TaskResult[T]
 
 /** A reference to a DirectTaskResult that has been stored in the worker's BlockManager. */
-private[spark] case class IndirectTaskResult[T](blockId: BlockId, size: Int)
-  extends TaskResult[T] with Serializable
+private[spark] case class IndirectTaskResult[T](blockId: BlockId, size: Int,
+  rddSizes: Map[Int, Option[(Int, Long, Long)]] = Map.empty) extends TaskResult[T] with Serializable
 
 /** A TaskResult that contains the task's return value and accumulator updates. */
 private[spark] class DirectTaskResult[T](
     var valueBytes: ByteBuffer,
-    var accumUpdates: Seq[AccumulatorV2[_, _]])
+    var accumUpdates: Seq[AccumulatorV2[_, _]],
+    var rddSizes: Map[Int, Option[(Int, Long, Long)]] = Map.empty)
   extends TaskResult[T] with Externalizable {
 
   private var valueObjectDeserialized = false
   private var valueObject: T = _
 
-  def this() = this(null.asInstanceOf[ByteBuffer], null)
+  def this() = this(null.asInstanceOf[ByteBuffer], null, null)
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     out.writeInt(valueBytes.remaining)
     Utils.writeByteBuffer(valueBytes, out)
     out.writeInt(accumUpdates.size)
     accumUpdates.foreach(out.writeObject)
+    out.writeInt(rddSizes.size)
+    rddSizes.foreach { case (rddId, sizeInfo) =>
+      out.writeInt(rddId)
+      sizeInfo match {
+        case Some((partition, count, size)) =>
+          out.writeInt(partition)
+          out.writeLong(count)
+          out.writeLong(size)
+        case None =>
+          out.writeInt(0)
+          out.writeLong(0)
+          out.writeLong(0)
+      }
+    }
   }
 
   override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
@@ -69,6 +86,22 @@ private[spark] class DirectTaskResult[T](
       accumUpdates = _accumUpdates
     }
     valueObjectDeserialized = false
+
+    val numSizes = in.readInt
+    if (numSizes == 0) {
+      rddSizes = immutable.Map.empty
+    } else {
+      val _rddSizes = new HashMap[Int, Option[(Int, Long, Long)]]()
+      for (i <- 0 until numSizes) {
+        val rddId = in.readInt
+        val size = (in.readInt, in.readLong, in.readLong)
+        _rddSizes(rddId) = size match {
+          case (_, 0, 0) => None
+          case _ => Some(size)
+        }
+      }
+      rddSizes = _rddSizes
+    }
   }
 
   /**

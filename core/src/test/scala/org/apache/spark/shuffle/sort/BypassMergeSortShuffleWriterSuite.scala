@@ -132,6 +132,7 @@ class BypassMergeSortShuffleWriterSuite extends SparkFunSuite with BeforeAndAfte
 
   test("write empty iterator") {
     val writer = new BypassMergeSortShuffleWriter[Int, Int](
+      null,
       blockManager,
       blockResolver,
       shuffleHandle,
@@ -156,6 +157,7 @@ class BypassMergeSortShuffleWriterSuite extends SparkFunSuite with BeforeAndAfte
     def records: Iterator[(Int, Int)] =
       Iterator((1, 1), (5, 5)) ++ (0 until 100000).iterator.map(x => (2, 2))
     val writer = new BypassMergeSortShuffleWriter[Int, Int](
+      null,
       blockManager,
       blockResolver,
       shuffleHandle,
@@ -191,6 +193,7 @@ class BypassMergeSortShuffleWriterSuite extends SparkFunSuite with BeforeAndAfte
         }
 
     val writer = new BypassMergeSortShuffleWriter[Int, Int](
+      null,
       blockManager,
       blockResolver,
       shuffleHandle,
@@ -213,6 +216,7 @@ class BypassMergeSortShuffleWriterSuite extends SparkFunSuite with BeforeAndAfte
 
   test("cleanup of intermediate files after errors") {
     val writer = new BypassMergeSortShuffleWriter[Int, Int](
+      null,
       blockManager,
       blockResolver,
       shuffleHandle,

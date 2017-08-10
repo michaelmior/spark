@@ -19,6 +19,10 @@ package org.apache.spark.storage
 
 import java.io.{Externalizable, ObjectInput, ObjectOutput}
 
+import scala.collection.Map
+import scala.collection.immutable
+import scala.collection.mutable.HashMap
+
 import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.util.Utils
 
@@ -88,6 +92,49 @@ private[spark] object BlockManagerMessages {
       storageLevel = StorageLevel(in)
       memSize = in.readLong()
       diskSize = in.readLong()
+    }
+  }
+
+  case class ReportRddSizes(
+      var rddSizes: Map[Int, Option[(Int, Long, Long)]])
+    extends ToBlockManagerMaster
+    with Externalizable {
+
+    def this() = this(null)  // For deserialization only
+
+    override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
+      out.writeInt(rddSizes.size)
+      rddSizes.foreach { case (rddId, sizeInfo) =>
+        out.writeInt(rddId)
+        sizeInfo match {
+          case Some((partition, count, size)) =>
+            out.writeInt(partition)
+            out.writeLong(count)
+            out.writeLong(size)
+          case None =>
+            out.writeInt(0)
+            out.writeLong(0)
+            out.writeLong(0)
+        }
+      }
+    }
+
+    override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
+      val numSizes = in.readInt
+      if (numSizes == 0) {
+        rddSizes = immutable.Map.empty
+      } else {
+        val _rddSizes = new HashMap[Int, Option[(Int, Long, Long)]]()
+        for (i <- 0 until numSizes) {
+          val rddId = in.readInt
+          val size = (in.readInt, in.readLong, in.readLong)
+          _rddSizes(rddId) = size match {
+            case (_, 0, 0) => None
+            case _ => Some(size)
+          }
+        }
+        rddSizes = _rddSizes
+      }
     }
   }
 

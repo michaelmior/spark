@@ -20,17 +20,20 @@ package org.apache.spark.shuffle.sort
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.scheduler.MapStatus
-import org.apache.spark.shuffle.{BaseShuffleHandle, IndexShuffleBlockResolver, ShuffleWriter}
+import org.apache.spark.shuffle.{BaseShuffleHandle, IndexShuffleBlockResolver, ShuffleManager, ShuffleWriter}
 import org.apache.spark.storage.ShuffleBlockId
 import org.apache.spark.util.Utils
 import org.apache.spark.util.collection.ExternalSorter
 
 private[spark] class SortShuffleWriter[K, V, C](
+    val shuffleManager: ShuffleManager,
     shuffleBlockResolver: IndexShuffleBlockResolver,
     handle: BaseShuffleHandle[K, V, C],
     mapId: Int,
     context: TaskContext)
   extends ShuffleWriter[K, V] with Logging {
+
+  protected val shuffleId = handle.shuffleId
 
   private val dep = handle.dependency
 
@@ -81,6 +84,8 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   /** Close this writer, passing along whether the map completed */
   override def stop(success: Boolean): Option[MapStatus] = {
+    super.stop(success)
+
     try {
       if (stopping) {
         return None

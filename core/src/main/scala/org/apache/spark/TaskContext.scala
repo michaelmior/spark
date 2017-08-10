@@ -20,10 +20,13 @@ package org.apache.spark
 import java.io.Serializable
 import java.util.Properties
 
+import scala.collection.Map
+
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.memory.TaskMemoryManager
 import org.apache.spark.metrics.source.Source
+import org.apache.spark.rdd.RDD
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util.{AccumulatorV2, TaskCompletionListener, TaskFailureListener}
 
@@ -211,4 +214,13 @@ abstract class TaskContext extends Serializable {
    */
   private[spark] def setFetchFailed(fetchFailed: FetchFailedException): Unit
 
+  /**
+   * Collect all the estimated sizes from a given RDD and its ancestors
+   */
+  private[spark] def collectEstimatedRddSizes(rdd: RDD[_]): Unit
+
+  /**
+   * Retrieve the estimated sizes for RDDs in this task
+   */
+  private[spark] def getRddSizes(): Map[Int, Option[(Int, Long, Long)]]
 }

@@ -138,6 +138,12 @@ case class SparkListenerNodeUnblacklisted(time: Long, hostId: String)
 @DeveloperApi
 case class SparkListenerBlockUpdated(blockUpdatedInfo: BlockUpdatedInfo) extends SparkListenerEvent
 
+@DeveloperApi
+case class SparkListenerRDDSizesUpdated(
+    rddSizesUpdated: Map[Int, Option[(Int, Long, Long)]],
+    source: String)
+  extends SparkListenerEvent
+
 /**
  * Periodic updates from executors.
  * @param execId executor id
@@ -298,6 +304,11 @@ private[spark] trait SparkListenerInterface {
    */
   def onSpeculativeTaskSubmitted(speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit
 
+  /*
+   * Called when the driver receives updates to estimated RDD size.
+   */
+  def onRDDSizesUpdated(rddSizesUpdated: SparkListenerRDDSizesUpdated): Unit
+
   /**
    * Called when other events like SQL-specific events are posted.
    */
@@ -364,6 +375,8 @@ abstract class SparkListener extends SparkListenerInterface {
 
   override def onSpeculativeTaskSubmitted(
       speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit = { }
+
+  override def onRDDSizesUpdated(rddSizesUpdated: SparkListenerRDDSizesUpdated): Unit = { }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = { }
 }

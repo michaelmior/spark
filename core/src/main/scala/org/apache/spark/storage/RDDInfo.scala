@@ -17,6 +17,7 @@
 
 package org.apache.spark.storage
 
+import org.apache.spark.Dependency
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.rdd.{RDD, RDDOperationScope}
 import org.apache.spark.util.Utils
@@ -36,6 +37,8 @@ class RDDInfo(
   var memSize = 0L
   var diskSize = 0L
   var externalBlockStoreSize = 0L
+  var estimatedSize: Option[(Int, Long, Long)] = None
+  var dependencies: Seq[Dependency[_]] = Seq.empty
 
   def isCached: Boolean = (memSize + diskSize > 0) && numCachedPartitions > 0
 
@@ -56,7 +59,10 @@ private[spark] object RDDInfo {
   def fromRdd(rdd: RDD[_]): RDDInfo = {
     val rddName = Option(rdd.name).getOrElse(Utils.getFormattedClassName(rdd))
     val parentIds = rdd.dependencies.map(_.rdd.id)
-    new RDDInfo(rdd.id, rddName, rdd.partitions.length,
+    val info = new RDDInfo(rdd.id, rddName, rdd.partitions.length,
       rdd.getStorageLevel, parentIds, rdd.creationSite.shortForm, rdd.scope)
+    info.dependencies = rdd.dependencies
+
+    info
   }
 }

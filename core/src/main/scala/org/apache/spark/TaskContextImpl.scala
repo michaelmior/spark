@@ -20,13 +20,15 @@ package org.apache.spark
 import java.util.Properties
 import javax.annotation.concurrent.GuardedBy
 
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.Map
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.memory.TaskMemoryManager
 import org.apache.spark.metrics.MetricsSystem
 import org.apache.spark.metrics.source.Source
+import org.apache.spark.rdd.RDD
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util._
 
@@ -74,6 +76,8 @@ private[spark] class TaskContextImpl(
   // If there was a fetch failure in the task, we store it here, to make sure user-code doesn't
   // hide the exception.  See SPARK-19276
   @volatile private var _fetchFailedException: Option[FetchFailedException] = None
+
+  private var rddSizes: HashMap[Int, Option[(Int, Long, Long)]] = new HashMap()
 
   @GuardedBy("this")
   override def addTaskCompletionListener(listener: TaskCompletionListener)
@@ -176,5 +180,12 @@ private[spark] class TaskContextImpl(
   }
 
   private[spark] def fetchFailed: Option[FetchFailedException] = _fetchFailedException
+
+  private[spark] def collectEstimatedRddSizes(rdd: RDD[_]): Unit = {
+    rddSizes(rdd.id) = rdd.estimatedSize
+    rdd.getNarrowAncestors.foreach { r => rddSizes(r.id) = r.estimatedSize }
+  }
+
+  private[spark] def getRddSizes(): Map[Int, Option[(Int, Long, Long)]] = rddSizes
 
 }

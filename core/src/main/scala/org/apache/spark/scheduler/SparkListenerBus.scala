@@ -73,6 +73,9 @@ private[spark] trait SparkListenerBus
         listener.onBlockUpdated(blockUpdated)
       case speculativeTaskSubmitted: SparkListenerSpeculativeTaskSubmitted =>
         listener.onSpeculativeTaskSubmitted(speculativeTaskSubmitted)
+      case rddSizesUpdated: SparkListenerRDDSizesUpdated =>
+        listener.onRDDSizesUpdated(rddSizesUpdated)
+      case logStart: SparkListenerLogStart => // ignore event log metadata
       case _ => listener.onOtherEvent(event)
     }
   }

@@ -25,10 +25,19 @@ import org.apache.spark.scheduler.MapStatus
  * Obtained inside a map task to write out records to the shuffle system.
  */
 private[spark] abstract class ShuffleWriter[K, V] {
+  protected def shuffleManager: ShuffleManager
+  protected def shuffleId: Int
+
   /** Write a sequence of records to this task's output */
   @throws[IOException]
   def write(records: Iterator[Product2[K, V]]): Unit
 
   /** Close this writer, passing along whether the map completed */
-  def stop(success: Boolean): Option[MapStatus]
+  def stop(success: Boolean): Option[MapStatus] = {
+    if (success && shuffleManager != null) {
+      shuffleManager.shuffleComplete(this.shuffleId)
+    }
+
+    None
+  }
 }

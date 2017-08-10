@@ -79,6 +79,10 @@ class BlockManagerMaster(
     res
   }
 
+  def reportRddSizes(rddSizes: scala.collection.Map[Int, Option[(Int, Long, Long)]]) {
+    driverEndpoint.askSync[Boolean](ReportRddSizes(rddSizes))
+  }
+
   /** Get locations of the blockId from the driver */
   def getLocations(blockId: BlockId): Seq[BlockManagerId] = {
     driverEndpoint.askSync[Seq[BlockManagerId]](GetLocations(blockId))

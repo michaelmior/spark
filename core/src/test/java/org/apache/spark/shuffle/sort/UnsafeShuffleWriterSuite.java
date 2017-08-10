@@ -156,6 +156,7 @@ public class UnsafeShuffleWriterSuite {
       boolean transferToEnabled) throws IOException {
     conf.set("spark.file.transferTo", String.valueOf(transferToEnabled));
     return new UnsafeShuffleWriter<>(
+      null,
       blockManager,
       shuffleBlockResolver,
       taskMemoryManager,
@@ -515,6 +516,7 @@ public class UnsafeShuffleWriterSuite {
     when(taskMemoryManager.pageSizeBytes()).thenReturn(pageSizeBytes);
     final UnsafeShuffleWriter<Object, Object> writer =
       new UnsafeShuffleWriter<>(
+        null,
         blockManager,
         shuffleBlockResolver,
         taskMemoryManager,

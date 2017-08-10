@@ -145,6 +145,11 @@ public class SparkFirehoseListener implements SparkListenerInterface {
   }
 
   @Override
+  public void onRDDSizesUpdated(SparkListenerRDDSizesUpdated rddSizesUpdated) {
+    onEvent(rddSizesUpdated);
+  }
+
+  @Override
   public void onOtherEvent(SparkListenerEvent event) {
     onEvent(event);
   }

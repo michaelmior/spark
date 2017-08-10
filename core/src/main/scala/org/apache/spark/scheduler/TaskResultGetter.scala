@@ -63,6 +63,8 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
         try {
           val (result, size) = serializer.get().deserialize[TaskResult[_]](serializedData) match {
             case directResult: DirectTaskResult[_] =>
+              scheduler.sc.listenerBus.post(SparkListenerRDDSizesUpdated(directResult.rddSizes,
+                "DirectTaskResult"))
               if (!taskSetManager.canFetchMoreResults(serializedData.limit())) {
                 return
               }
@@ -71,7 +73,9 @@ private[spark] class TaskResultGetter(sparkEnv: SparkEnv, scheduler: TaskSchedul
               // "TaskSetManager.handleSuccessfulTask", it does not need to deserialize the value.
               directResult.value(taskResultSerializer.get())
               (directResult, serializedData.limit())
-            case IndirectTaskResult(blockId, size) =>
+            case IndirectTaskResult(blockId, size, rddSizes) =>
+              scheduler.sc.listenerBus.post(SparkListenerRDDSizesUpdated(rddSizes,
+                "IndirectTaskResult"))
               if (!taskSetManager.canFetchMoreResults(size)) {
                 // dropped by executor if size is larger than maxResultSize
                 sparkEnv.blockManager.master.removeBlock(blockId)

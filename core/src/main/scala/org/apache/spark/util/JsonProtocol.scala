@@ -30,6 +30,7 @@ import org.json4s.JsonDSL._
 import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark._
+import org.apache.spark.{NarrowDependency, ShuffleDependency}
 import org.apache.spark.executor._
 import org.apache.spark.rdd.RDDOperationScope
 import org.apache.spark.scheduler._
@@ -98,6 +99,8 @@ private[spark] object JsonProtocol {
         logStartToJson(logStart)
       case metricsUpdate: SparkListenerExecutorMetricsUpdate =>
         executorMetricsUpdateToJson(metricsUpdate)
+      case rddSizesUpdate: SparkListenerRDDSizesUpdated =>
+        rddSizesUpdateToJson(rddSizesUpdate)
       case blockUpdated: SparkListenerBlockUpdated =>
         throw new MatchError(blockUpdated)  // TODO(ekl) implement this
       case _ => parse(mapper.writeValueAsString(event))
@@ -243,6 +246,23 @@ private[spark] object JsonProtocol {
       ("Stage ID" -> stageId) ~
       ("Stage Attempt ID" -> stageAttemptId) ~
       ("Accumulator Updates" -> JArray(updates.map(accumulableInfoToJson).toList))
+    })
+  }
+
+  def rddSizesUpdateToJson(rddSizesUpdate: SparkListenerRDDSizesUpdated): JValue = {
+    ("Event" -> SPARK_LISTENER_EVENT_FORMATTED_CLASS_NAMES.rddSizesUpdate) ~
+    ("Source" -> rddSizesUpdate.source) ~
+    ("RDD Sizes" -> rddSizesUpdate.rddSizesUpdated.map { case (id, sizeInfo) =>
+      ("RDD ID" -> id) ~
+      (sizeInfo match {
+        case Some((partition, count, size)) =>
+          ("Partition" -> partition) ~
+          ("Count" -> count) ~
+          ("Estimated Size" -> size)
+        case None =>
+          ("Count" -> 0) ~
+          ("Estimated Size" -> 0)
+      })
     })
   }
 
@@ -435,7 +455,23 @@ private[spark] object JsonProtocol {
     ("Number of Partitions" -> rddInfo.numPartitions) ~
     ("Number of Cached Partitions" -> rddInfo.numCachedPartitions) ~
     ("Memory Size" -> rddInfo.memSize) ~
-    ("Disk Size" -> rddInfo.diskSize)
+    ("Disk Size" -> rddInfo.diskSize) ~
+    ("Dependencies" -> JArray(List(rddInfo.dependencies.map { dep =>
+      val depJson: JValue = dep match {
+        case narrowDep: NarrowDependency[_] =>
+          ("RDD ID" -> narrowDep.rdd.id) ~
+          ("Type" -> "Narrow") ~
+          ("Parents" -> JArray((0 to rddInfo.numPartitions - 1).map { part =>
+            JArray(List(JInt(part), JArray(narrowDep.getParents(part).map(JInt(_)).toList)))
+          }.toList))
+        case shuffleDep: ShuffleDependency[_, _, _] =>
+          ("RDD ID" -> shuffleDep.rdd.id) ~
+          ("Type" -> "Shuffle")
+        case _ => JNothing
+      }
+
+      depJson
+    })))
   }
 
   def storageLevelToJson(storageLevel: StorageLevel): JValue = {
@@ -515,6 +551,7 @@ private[spark] object JsonProtocol {
     val executorRemoved = Utils.getFormattedClassName(SparkListenerExecutorRemoved)
     val logStart = Utils.getFormattedClassName(SparkListenerLogStart)
     val metricsUpdate = Utils.getFormattedClassName(SparkListenerExecutorMetricsUpdate)
+    val rddSizesUpdate = Utils.getFormattedClassName(SparkListenerRDDSizesUpdated)
   }
 
   def sparkEventFromJson(json: JValue): SparkListenerEvent = {
@@ -959,11 +996,17 @@ private[spark] object JsonProtocol {
     val numCachedPartitions = (json \ "Number of Cached Partitions").extract[Int]
     val memSize = (json \ "Memory Size").extract[Long]
     val diskSize = (json \ "Disk Size").extract[Long]
+    val count = Utils.jsonOption(json \ "Count").map(_.extract[Long])
+    val size = Utils.jsonOption(json \ "Estimated Size").map(_.extract[Long])
 
     val rddInfo = new RDDInfo(rddId, name, numPartitions, storageLevel, parentIds, callsite, scope)
     rddInfo.numCachedPartitions = numCachedPartitions
     rddInfo.memSize = memSize
     rddInfo.diskSize = diskSize
+    rddInfo.estimatedSize = (count, size) match {
+      case (Some(countVal), Some(sizeVal)) => Some((-1, countVal, sizeVal))
+      case _ => None
+    }
     rddInfo
   }
 

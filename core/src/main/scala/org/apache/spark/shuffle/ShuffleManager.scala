@@ -51,6 +51,11 @@ private[spark] trait ShuffleManager {
       context: TaskContext): ShuffleReader[K, C]
 
   /**
+   * Mark a shuffle as completed
+   */
+  def shuffleComplete(shuffleId: Int): Unit
+
+  /**
    * Remove a shuffle's metadata from the ShuffleManager.
    * @return true if the metadata removed successfully, otherwise false.
    */

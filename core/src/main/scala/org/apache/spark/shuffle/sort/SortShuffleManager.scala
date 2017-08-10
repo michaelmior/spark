@@ -81,6 +81,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
 
   override val shuffleBlockResolver = new IndexShuffleBlockResolver(conf)
 
+  private[this] val writeContexts = new ConcurrentHashMap[Int, TaskContext]()
+
   /**
    * Obtains a [[ShuffleHandle]] to pass to tasks.
    */
@@ -124,12 +126,14 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       handle: ShuffleHandle,
       mapId: Int,
       context: TaskContext): ShuffleWriter[K, V] = {
+    writeContexts.putIfAbsent(handle.shuffleId, context)
     numMapsForShuffle.putIfAbsent(
       handle.shuffleId, handle.asInstanceOf[BaseShuffleHandle[_, _, _]].numMaps)
     val env = SparkEnv.get
     handle match {
       case unsafeShuffleHandle: SerializedShuffleHandle[K @unchecked, V @unchecked] =>
         new UnsafeShuffleWriter(
+          this,
           env.blockManager,
           shuffleBlockResolver.asInstanceOf[IndexShuffleBlockResolver],
           context.taskMemoryManager(),
@@ -139,6 +143,7 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           env.conf)
       case bypassMergeSortHandle: BypassMergeSortShuffleHandle[K @unchecked, V @unchecked] =>
         new BypassMergeSortShuffleWriter(
+          this,
           env.blockManager,
           shuffleBlockResolver.asInstanceOf[IndexShuffleBlockResolver],
           bypassMergeSortHandle,
@@ -146,7 +151,14 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           context,
           env.conf)
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
-        new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
+        new SortShuffleWriter(this, shuffleBlockResolver, other, mapId, context)
+    }
+  }
+
+  override def shuffleComplete(shuffleId: Int): Unit = {
+    if (writeContexts.containsKey(shuffleId)) {
+      val context = writeContexts.remove(shuffleId)
+      SparkEnv.get.blockManager.master.reportRddSizes(context.getRddSizes)
     }
   }
 

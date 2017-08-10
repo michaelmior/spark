@@ -51,6 +51,7 @@ import org.apache.spark.scheduler.MapStatus$;
 import org.apache.spark.serializer.SerializationStream;
 import org.apache.spark.serializer.SerializerInstance;
 import org.apache.spark.shuffle.IndexShuffleBlockResolver;
+import org.apache.spark.shuffle.ShuffleManager;
 import org.apache.spark.shuffle.ShuffleWriter;
 import org.apache.spark.storage.BlockManager;
 import org.apache.spark.storage.TimeTrackingOutputStream;
@@ -69,6 +70,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   static final int DEFAULT_INITIAL_SORT_BUFFER_SIZE = 4096;
   static final int DEFAULT_INITIAL_SER_BUFFER_SIZE = 1024 * 1024;
 
+  private final ShuffleManager shuffleManager;
   private final BlockManager blockManager;
   private final IndexShuffleBlockResolver shuffleBlockResolver;
   private final TaskMemoryManager memoryManager;
@@ -117,6 +119,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   }
 
   public UnsafeShuffleWriter(
+      ShuffleManager shuffleManager,
       BlockManager blockManager,
       IndexShuffleBlockResolver shuffleBlockResolver,
       TaskMemoryManager memoryManager,
@@ -131,6 +134,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         SortShuffleManager.MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE() +
         " reduce partitions");
     }
+    this.shuffleManager = shuffleManager;
     this.blockManager = blockManager;
     this.shuffleBlockResolver = shuffleBlockResolver;
     this.memoryManager = memoryManager;
@@ -169,6 +173,17 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     updatePeakMemoryUsed();
     return peakMemoryUsedBytes;
   }
+
+  @Override
+  public ShuffleManager shuffleManager() {
+    return shuffleManager;
+  }
+
+  @Override
+  public int shuffleId() {
+    return shuffleId;
+  }
+
 
   /**
    * This convenience method should only be called in test code.
@@ -494,6 +509,8 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   @Override
   public Option<MapStatus> stop(boolean success) {
+    super.stop(success);
+
     try {
       taskContext.taskMetrics().incPeakExecutionMemory(getPeakMemoryUsedBytes());
 

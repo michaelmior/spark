@@ -79,6 +79,10 @@ class BlockManagerMasterEndpoint(
       context.reply(updateBlockInfo(blockManagerId, blockId, storageLevel, deserializedSize, size))
       listenerBus.post(SparkListenerBlockUpdated(BlockUpdatedInfo(_updateBlockInfo)))
 
+    case ReportRddSizes(rddSizes) =>
+      context.reply(true)
+      listenerBus.post(SparkListenerRDDSizesUpdated(rddSizes, "BlockManagerMaster"))
+
     case GetLocations(blockId) =>
       context.reply(getLocations(blockId))
 

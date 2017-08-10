@@ -44,6 +44,7 @@ import org.apache.spark.scheduler.MapStatus$;
 import org.apache.spark.serializer.Serializer;
 import org.apache.spark.serializer.SerializerInstance;
 import org.apache.spark.shuffle.IndexShuffleBlockResolver;
+import org.apache.spark.shuffle.ShuffleManager;
 import org.apache.spark.shuffle.ShuffleWriter;
 import org.apache.spark.storage.*;
 import org.apache.spark.util.Utils;
@@ -76,6 +77,7 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   private final int fileBufferSize;
   private final int numPartitions;
+  private final ShuffleManager shuffleManager;
   private final BlockManager blockManager;
   private final Partitioner partitioner;
   private final ShuffleWriteMetrics writeMetrics;
@@ -98,6 +100,7 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   private boolean stopping = false;
 
   BypassMergeSortShuffleWriter(
+      ShuffleManager shuffleManager,
       BlockManager blockManager,
       IndexShuffleBlockResolver shuffleBlockResolver,
       BypassMergeSortShuffleHandle<K, V> handle,
@@ -106,6 +109,7 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       SparkConf conf) {
     // Use getSizeAsKb (not bytes) to maintain backwards compatibility if no units are provided
     this.fileBufferSize = (int) conf.getSizeAsKb("spark.shuffle.file.buffer", "32k") * 1024;
+    this.shuffleManager = shuffleManager;
     this.blockManager = blockManager;
     final ShuffleDependency<K, V, V> dep = handle.dependency();
     this.mapId = mapId;
@@ -173,6 +177,16 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     return partitionLengths;
   }
 
+  @Override
+  public ShuffleManager shuffleManager() {
+    return shuffleManager;
+  }
+
+  @Override
+  public int shuffleId() {
+    return shuffleId;
+  }
+
   /**
    * Concatenate all of the per-partition files into a single combined file.
    *
@@ -221,6 +235,8 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   @Override
   public Option<MapStatus> stop(boolean success) {
+    super.stop(success);
+
     if (stopping) {
       return None$.empty();
     } else {

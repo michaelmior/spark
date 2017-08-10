@@ -41,7 +41,7 @@ import org.apache.spark.partial.CountEvaluator
 import org.apache.spark.partial.GroupedCountEvaluator
 import org.apache.spark.partial.PartialResult
 import org.apache.spark.storage.{RDDBlockId, StorageLevel}
-import org.apache.spark.util.{BoundedPriorityQueue, Utils}
+import org.apache.spark.util.{BoundedPriorityQueue, SizeTrackingIterator, Utils}
 import org.apache.spark.util.collection.{OpenHashMap, Utils => collectionUtils}
 import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, PoissonSampler,
   SamplingUtils}
@@ -138,6 +138,12 @@ abstract class RDD[T: ClassTag](
 
   /** Optionally overridden by subclasses to specify how they are partitioned. */
   @transient val partitioner: Option[Partitioner] = None
+
+  /** Once we start iterating over this RDD, track the size */
+  var sizeTracking: Option[SizeTrackingIterator[_]] = None
+
+  /** The partition whose size is currently being tracked */
+  var sizedPartition: Option[Int] = None
 
   // =======================================================================
   // Methods and fields available on all RDDs
@@ -266,6 +272,16 @@ abstract class RDD[T: ClassTag](
   @Since("1.6.0")
   final def getNumPartitions: Int = partitions.length
 
+  def estimatedSize: Option[(Int, Long, Long)] = {
+    sizeTracking match {
+      case Some(tracked) =>
+        tracked.estimatedSize match {
+          case (count, size) => Some((sizedPartition.get, count, size))
+        }
+      case None => None
+    }
+  }
+
   /**
    * Get the preferred locations of a partition, taking into account whether the
    * RDD is checkpointed.
@@ -282,11 +298,18 @@ abstract class RDD[T: ClassTag](
    * subclasses of RDD.
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
-    if (storageLevel != StorageLevel.NONE) {
-      getOrCompute(split, context)
+    val iterator = if (storageLevel != StorageLevel.NONE) {
+      new SizeTrackingIterator[T](getOrCompute(split, context).asInstanceOf[Iterator[T]])
     } else {
-      computeOrReadCheckpoint(split, context)
+      new SizeTrackingIterator[T](computeOrReadCheckpoint(split, context).asInstanceOf[Iterator[T]])
     }
+
+    if (sizeTracking.isEmpty) {
+      sizeTracking = Some(iterator)
+      sizedPartition = Some(split.index)
+    }
+
+    iterator
   }
 
   /**
