@@ -329,6 +329,38 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     master.getLocations(rdd(0, 1)) should have size 0
   }
 
+  test("removing partition") {
+    store = makeBlockManager(20000)
+    val a1 = new Array[Byte](4000)
+    val a2 = new Array[Byte](4000)
+    val a3 = new Array[Byte](4000)
+    // Putting a1, a2 and a3 in memory.
+    store.putSingle(rdd(0, 0), a1, StorageLevel.MEMORY_ONLY)
+    store.putSingle(rdd(0, 1), a2, StorageLevel.MEMORY_ONLY)
+    store.putSingle("nonrddblock", a3, StorageLevel.MEMORY_ONLY)
+    master.removePartition(0, 0, blocking = false)
+
+    eventually(timeout(1000 milliseconds), interval(10 milliseconds)) {
+      store.getSingleAndReleaseLock(rdd(0, 0)) should be (None)
+      master.getLocations(rdd(0, 0)) should have size 0
+    }
+    eventually(timeout(1000 milliseconds), interval(10 milliseconds)) {
+      store.getSingleAndReleaseLock(rdd(0, 1)) should not be (None)
+      master.getLocations(rdd(0, 1)) should have size 1
+    }
+    eventually(timeout(1000 milliseconds), interval(10 milliseconds)) {
+      store.getSingleAndReleaseLock("nonrddblock") should not be (None)
+      master.getLocations("nonrddblock") should have size (1)
+    }
+
+    store.putSingle(rdd(0, 0), a1, StorageLevel.MEMORY_ONLY)
+    master.removePartition(0, 0, blocking = true)
+    store.getSingleAndReleaseLock(rdd(0, 0)) should be (None)
+    master.getLocations(rdd(0, 0)) should have size 0
+    store.getSingleAndReleaseLock(rdd(0, 1)) should not be (None)
+    master.getLocations(rdd(0, 1)) should have size 1
+  }
+
   test("removing broadcast") {
     store = makeBlockManager(2000)
     val driverStore = store
