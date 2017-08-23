@@ -233,6 +233,26 @@ abstract class RDD[T: ClassTag](
     this
   }
 
+  /**
+   * Really override the storage level
+   *
+   * @return This RDD.
+   */
+  def overrideStorageLevel(newLevel: StorageLevel, blocking: Boolean = true): this.type = {
+    if (storageLevel == StorageLevel.NONE && newLevel != StorageLevel.NONE) {
+      sc.cleaner.foreach(_.registerRDDForCleanup(this))
+      sc.persistRDD(this)
+    }
+
+    if (storageLevel == StorageLevel.NONE) {
+      logInfo("Removing RDD " + id + " from persistence list")
+      sc.unpersistRDD(id, blocking)
+    }
+
+    storageLevel = newLevel
+    this
+  }
+
   /** Get the RDD's current storage level, or StorageLevel.NONE if none is set. */
   def getStorageLevel: StorageLevel = storageLevel
 

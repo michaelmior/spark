@@ -33,7 +33,7 @@ import org.apache.spark.broadcast.BroadcastManager
 import org.apache.spark.rdd.RDD
 import org.apache.spark.scheduler.SchedulingMode.SchedulingMode
 import org.apache.spark.shuffle.{FetchFailedException, MetadataFetchFailedException}
-import org.apache.spark.storage.{BlockId, BlockManagerId, BlockManagerMaster}
+import org.apache.spark.storage.{BlockId, BlockManagerId, BlockManagerMaster, RDDCachingInfo, StageCachingInfo, StorageLevel}
 import org.apache.spark.util.{AccumulatorContext, AccumulatorV2, CallSite, LongAccumulator, Utils}
 
 class DAGSchedulerEventProcessLoopTester(dagScheduler: DAGScheduler)
@@ -506,6 +506,39 @@ class DAGSchedulerSuite extends SparkFunSuite with LocalSparkContext with TimeLi
     assert(accInfo1 !== accInfo2)
     assert(accInfo2 === accInfo3)
     assert(accInfo2.hashCode() === accInfo3.hashCode())
+  }
+
+  test("cache info setting with shuffle") {
+    val shuffleMapRdd = new MyRDD(sc, 2, Nil)
+    val shuffleDep = new ShuffleDependency(shuffleMapRdd, new HashPartitioner(1))
+    val reduceRdd = new MyRDD(sc, 1, List(shuffleDep))
+    scheduler.cachingInfo = Map(2 -> new StageCachingInfo(2, Seq(
+      new RDDCachingInfo(0, 0, StorageLevel.MEMORY_ONLY)
+    )))
+
+    assert(shuffleMapRdd.getStorageLevel == StorageLevel.NONE)
+    submitMapStage(shuffleDep)
+    completeShuffleMapStageSuccessfully(0, 0, 1)
+    results.clear()
+    assertDataStructuresEmpty()
+    assert(shuffleMapRdd.getStorageLevel == StorageLevel.NONE)
+
+    submit(reduceRdd, Array(0))
+    completeNextResultStageWithSuccess(2, 0)
+    assert(shuffleMapRdd.getStorageLevel == StorageLevel.MEMORY_ONLY)
+    results.clear()
+    assertDataStructuresEmpty()
+  }
+
+  test("cache info setting") {
+    val baseRdd = new MyRDD(sc, 1, Nil)
+    val finalRdd = new MyRDD(sc, 1, List(new OneToOneDependency(baseRdd)))
+    scheduler.cachingInfo = Map(0 -> new StageCachingInfo(0, Seq(
+      new RDDCachingInfo(0, 0, StorageLevel.MEMORY_ONLY)
+    )))
+    assert(baseRdd.getStorageLevel == StorageLevel.NONE)
+    submit(finalRdd, Array(0))
+    assert(baseRdd.getStorageLevel == StorageLevel.MEMORY_ONLY)
   }
 
   test("cache location preferences w/ dependency") {

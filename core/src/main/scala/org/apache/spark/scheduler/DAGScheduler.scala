@@ -30,10 +30,14 @@ import scala.language.existentials
 import scala.language.postfixOps
 import scala.util.control.NonFatal
 
+import org.apache.commons.io.IOUtils
 import org.apache.commons.lang3.SerializationUtils
+import org.apache.hadoop.fs.Path
+import org.json4s.jackson.JsonMethods._
 
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.executor.TaskMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config
@@ -203,6 +207,11 @@ class DAGScheduler(
     sc.getConf.getInt("spark.stage.maxConsecutiveAttempts",
       DAGScheduler.DEFAULT_MAX_CONSECUTIVE_STAGE_ATTEMPTS)
 
+  private val cachingInfoFile =
+    sc.getConf.getOption("spark.storage.cachingInfoFile").map(Utils.resolveURI(_))
+
+  private var _cachingInfo: Map[Int, StageCachingInfo] = Map.empty
+
   private val messageScheduler =
     ThreadUtils.newDaemonSingleThreadScheduledExecutor("dag-scheduler-message")
 
@@ -353,6 +362,7 @@ class DAGScheduler(
     val id = nextStageId.getAndIncrement()
     val stage = new ShuffleMapStage(
       id, rdd, numTasks, parents, jobId, rdd.creationSite, shuffleDep, mapOutputTracker)
+    applyStorageLevels(stage)
 
     stageIdToStage(id) = stage
     shuffleIdToMapStage(shuffleDep.shuffleId) = stage
@@ -379,6 +389,7 @@ class DAGScheduler(
     val parents = getOrCreateParentStages(rdd, jobId)
     val id = nextStageId.getAndIncrement()
     val stage = new ResultStage(id, rdd, func, partitions, parents, jobId, callSite)
+    applyStorageLevels(stage)
     stageIdToStage(id) = stage
     updateJobIdStageIdMaps(jobId, stage)
     stage
@@ -931,6 +942,60 @@ class DAGScheduler(
     if (finalStage.isAvailable) {
       markMapStageJobAsFinished(job, mapOutputTracker.getStatistics(dependency))
     }
+  }
+
+  def cachingInfo = _cachingInfo
+
+  private[scheduler] def cachingInfo_=(newInfo: Map[Int, StageCachingInfo]) {
+    _cachingInfo = newInfo
+  }
+
+  private[scheduler] def loadCachingInfo() {
+    cachingInfoFile match {
+      case Some(path) => {
+        logInfo("Loading caching info file from " + path)
+        val hadoopConfiguration = SparkHadoopUtil.get.newConfiguration(sc.getConf)
+        val fileSystem = Utils.getHadoopFileSystem(path, hadoopConfiguration)
+        val pathObj = new Path(path)
+        val jsonText = IOUtils.toString(fileSystem.open(pathObj))
+        _cachingInfo = CachingJson.cachingFromJson(parse(jsonText))
+      }
+      case None => logInfo("No caching info file specified")
+    }
+  }
+
+  private def applyStorageLevels(stage: Stage) {
+    // Skip stages where no caching info is provided
+    if (!cachingInfo.contains(stage.id)) {
+      logInfo("No caching info provided for stage " + stage.id)
+      return
+    }
+
+    val stageCachingInfo = cachingInfo(stage.id)
+    val visited = new HashSet[RDD[_]]
+    val waitingForVisit = new ArrayStack[RDD[_]]
+    var cacheApplied = 0
+    def visit(rdd: RDD[_]) {
+      if (!visited(rdd) || cacheApplied >= stageCachingInfo.rddCachingInfos.size) {
+        visited += rdd
+        for (dep <- rdd.dependencies) {
+          waitingForVisit.push(dep.rdd)
+        }
+
+        val cacheInfo = stageCachingInfo.rddCachingInfos.find { info => info.id == rdd.id }
+        if (!cacheInfo.isEmpty) {
+          rdd.overrideStorageLevel(cacheInfo.get.storageLevel)
+          cacheApplied += 1
+        }
+      }
+    }
+
+    waitingForVisit.push(stage.rdd)
+    while (waitingForVisit.nonEmpty) {
+      visit(waitingForVisit.pop())
+    }
+
+    logInfo(s"Applied storage levels for ${cacheApplied} RDDs in stage ${stage.id}")
   }
 
   /** Submits stage, but first recursively submits any missing parents. */
@@ -1751,6 +1816,10 @@ private[scheduler] class DAGSchedulerEventProcessLoop(dagScheduler: DAGScheduler
   extends EventLoop[DAGSchedulerEvent]("dag-scheduler-event-loop") with Logging {
 
   private[this] val timer = dagScheduler.metricsSource.messageProcessingTimer
+
+  override def onStart(): Unit = {
+    dagScheduler.loadCachingInfo()
+  }
 
   /**
    * The main event loop of the DAG scheduler.
