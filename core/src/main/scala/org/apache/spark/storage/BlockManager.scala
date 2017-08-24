@@ -1456,8 +1456,7 @@ private[spark] class BlockManager(
   /**
    * Deserialize a block currently stored serialized in memory.
    */
-  def deserializeBlock[T](blockId: BlockId, classTag: ClassTag[T]): Boolean = {
-    val stream = memoryStore.getBytes(blockId).get.toInputStream()
+  def deserializeBlock[T](stream: InputStream, blockId: BlockId, classTag: ClassTag[T]): Boolean = {
     val values: Iterator[T] = serializerManager.dataDeserializeStream(
       blockId, stream)(classTag)
     memoryStore.putIteratorAsValues(blockId, values, classTag) match {
@@ -1469,15 +1468,21 @@ private[spark] class BlockManager(
   /**
    * Serialize a block currently stored deserialized in memory.
    */
-  def serializeBlock[T](blockId: BlockId, classTag: ClassTag[T]): Boolean = {
+  def serializeBlock[T](blockId: BlockId, classTag: ClassTag[T], memory: Boolean): Boolean = {
     val values: Iterator[T] = memoryStore.getValues(blockId).get.asInstanceOf[Iterator[T]]
     val out = new ChunkedByteBufferOutputStream(1024 * 1024 * 4, ByteBuffer.allocate)
     serializerManager.dataSerializeStream(blockId, out, values)(classTag)
+    memoryStore.remove(blockId)
 
     val buffer = out.toChunkedByteBuffer
-    memoryStore.putBytes(blockId, buffer.size, MemoryMode.ON_HEAP, () => {
-      buffer
-    })
+    if (memory) {
+      memoryStore.putBytes(blockId, buffer.size, MemoryMode.ON_HEAP, () => {
+        buffer
+      })
+    } else {
+      diskStore.putBytes(blockId, buffer)
+      true
+    }
   }
 
   /**
@@ -1496,9 +1501,18 @@ private[spark] class BlockManager(
 
         // Either serialize or deserialize the block as appropriate
         if (!blockStatus.storageLevel.deserialized && newLevel.deserialized) {
-          deserializeBlock(blockId, info.classTag)
+          val stream = if (blockStatus.storageLevel.useMemory) {
+            val in = memoryStore.getBytes(blockId).get.toInputStream()
+            memoryStore.remove(blockId)
+            in
+          } else {
+            val in = diskStore.getBytes(blockId).toInputStream()
+            diskStore.remove(blockId)
+            in
+          }
+          deserializeBlock(stream, blockId, info.classTag)
         } else if (blockStatus.storageLevel.deserialized && !newLevel.deserialized) {
-          serializeBlock(blockId, info.classTag)
+          serializeBlock(blockId, info.classTag, newLevel.useMemory)
         }
 
         if (info.tellMaster) {

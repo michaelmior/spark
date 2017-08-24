@@ -361,6 +361,47 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
     master.getLocations(rdd(0, 1)) should have size 1
   }
 
+  test("serializing a block to disk") {
+    store = makeBlockManager(20000)
+    val list1 = List(new Array[Byte](2000), new Array[Byte](2000))
+    store.putIterator(
+      "list1", list1.iterator, StorageLevel.MEMORY_ONLY, tellMaster = true)
+    store.serializeBlock("list1", ClassTag.Any, false)
+    assert(!store.memoryStore.contains("list1"), "list1 was in memory store")
+    assert(store.diskStore.contains("list1"), "list1 was not in disk store")
+  }
+
+  test("serializing a block to memory") {
+    store = makeBlockManager(20000)
+    val list1 = List(new Array[Byte](2000), new Array[Byte](2000))
+    store.putIterator(
+      "list1", list1.iterator, StorageLevel.MEMORY_ONLY, tellMaster = true)
+    store.serializeBlock("list1", ClassTag.Any, true)
+    assert(store.memoryStore.contains("list1"), "list1 was in memory store")
+    assert(store.memoryStore.serialized("list1").get, "list1 was not serialized")
+  }
+
+  test("deserializing a block from memory") {
+    store = makeBlockManager(20000)
+    val list1 = List(new Array[Byte](2000), new Array[Byte](2000))
+    store.putIterator(
+      "list1", list1.iterator, StorageLevel.MEMORY_ONLY_SER, tellMaster = true)
+    store.convertBlock("list1", StorageLevel.MEMORY_ONLY)
+    assert(store.memoryStore.contains("list1"), "list1 was not in memory store")
+    assert(!store.memoryStore.serialized("list1").get, "list1 was serialized")
+  }
+
+  test("deserializing a block from disk") {
+    store = makeBlockManager(20000)
+    val list1 = List(new Array[Byte](2000), new Array[Byte](2000))
+    store.putIterator(
+      "list1", list1.iterator, StorageLevel.DISK_ONLY, tellMaster = true)
+    store.convertBlock("list1", StorageLevel.MEMORY_ONLY)
+    assert(store.memoryStore.contains("list1"), "list1 was not in memory store")
+    assert(!store.memoryStore.serialized("list1").get, "list1 was serialized")
+    assert(!store.diskStore.contains("list1"), "list1 was in disk store")
+  }
+
   test("removing broadcast") {
     store = makeBlockManager(2000)
     val driverStore = store

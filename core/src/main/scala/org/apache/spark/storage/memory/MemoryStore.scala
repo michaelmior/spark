@@ -564,6 +564,15 @@ private[spark] class MemoryStore(
     entries.synchronized { entries.containsKey(blockId) }
   }
 
+  def serialized(blockId: BlockId): Option[Boolean] = {
+    val entry = entries.synchronized { entries.get(blockId) }
+    entry match {
+      case null => None
+      case _: DeserializedMemoryEntry[_] => Some(false)
+      case _: SerializedMemoryEntry[_] => Some(true)
+    }
+  }
+
   private def currentTaskAttemptId(): Long = {
     // In case this is called on the driver, return an invalid task attempt id.
     Option(TaskContext.get()).map(_.taskAttemptId()).getOrElse(-1L)
