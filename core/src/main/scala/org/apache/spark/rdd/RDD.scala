@@ -326,7 +326,9 @@ abstract class RDD[T: ClassTag](
    * subclasses of RDD.
    */
   final def iterator(split: Partition, context: TaskContext): Iterator[T] = {
-    val iterator = if (storageLevel != StorageLevel.NONE) {
+    val iterator = if (SparkEnv.get.conf.getBoolean("spark.rdd.ignorePersistence", false)) {
+      new SizeTrackingIterator[T](compute(split, context).asInstanceOf[Iterator[T]])
+    } else if (storageLevel != StorageLevel.NONE) {
       new SizeTrackingIterator[T](getOrCompute(split, context).asInstanceOf[Iterator[T]])
     } else {
       new SizeTrackingIterator[T](computeOrReadCheckpoint(split, context).asInstanceOf[Iterator[T]])
