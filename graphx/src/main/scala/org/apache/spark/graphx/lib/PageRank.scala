@@ -156,10 +156,9 @@ object PageRank extends Logging {
         (id, oldRank, msgSumOpt) => rPrb(src, id) + (1.0 - resetProb) * msgSumOpt.getOrElse(0.0)
       }.cache()
 
-      rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
       logInfo(s"PageRank finished iteration $iteration.")
-      prevRankGraph.vertices.unpersist(false)
-      prevRankGraph.edges.unpersist(false)
+      prevRankGraph.vertices.lazyUnpersist()
+      prevRankGraph.edges.lazyUnpersist()
 
       iteration += 1
     })
@@ -242,9 +241,8 @@ object PageRank extends Logging {
           popActivations +:+ resetActivations
         }.cache()
 
-      rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
-      prevRankGraph.vertices.unpersist(false)
-      prevRankGraph.edges.unpersist(false)
+      prevRankGraph.vertices.lazyUnpersist()
+      prevRankGraph.edges.lazyUnpersist()
 
       logInfo(s"Parallel Personalized PageRank finished iteration $i.")
 

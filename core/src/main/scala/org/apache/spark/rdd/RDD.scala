@@ -218,6 +218,14 @@ abstract class RDD[T: ClassTag](
    */
   def cache(): this.type = persist()
 
+  def unpersistPending(): Boolean = pendingUnpersist
+
+  def lazyUnpersist(): this.type = {
+    logInfo("Scheduling RDD " + id + " for lazy unpersist")
+    pendingUnpersist = true
+    this
+  }
+
   /**
    * Mark the RDD as non-persistent, and remove all blocks for it from memory and disk.
    *
@@ -229,6 +237,7 @@ abstract class RDD[T: ClassTag](
     logInfo("Removing RDD " + id + " from persistence list")
     sc.unpersistRDD(id, blocking)
     storageLevel = StorageLevel.NONE
+    pendingUnpersist = false
     this
   }
 
@@ -1664,6 +1673,8 @@ abstract class RDD[T: ClassTag](
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
   private var implicitPersist: Boolean = false
+
+  private var pendingUnpersist: Boolean = false
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
   @transient private[spark] val creationSite = sc.getCallSite()

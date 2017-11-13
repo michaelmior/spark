@@ -24,7 +24,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.annotation.tailrec
 import scala.collection.Map
-import scala.collection.mutable.{ArrayStack, HashMap, HashSet}
+import scala.collection.mutable.{ArrayStack, HashMap, HashSet, MultiMap, Set}
 import scala.concurrent.duration._
 import scala.language.existentials
 import scala.language.postfixOps
@@ -161,6 +161,11 @@ class DAGScheduler(
   private[scheduler] val failedStages = new HashSet[Stage]
 
   private[scheduler] val activeJobs = new HashSet[ActiveJob]
+
+  private[scheduler] val waitingUnpersistStages =
+    new HashMap[RDD[_], Set[Int]] with MultiMap[RDD[_], Int]
+  private[scheduler] val waitingUnpersistRdds =
+    new HashMap[Int, Set[RDD[_]]] with MultiMap[Int, RDD[_]]
 
   /**
    * Contains the locations that each RDD's partitions are cached on.  This map's keys are RDD ids
@@ -365,6 +370,59 @@ class DAGScheduler(
       mapOutputTracker.registerShuffle(shuffleDep.shuffleId, rdd.partitions.length)
     }
     stage
+  }
+
+  // After a stage finishes, check if an RDD needs to be unpersisted
+  private def checkPendingUnpersist(stage: Stage) {
+    // Skip stages with no RDDs to unpersist
+    if (!waitingUnpersistRdds.contains(stage.id)) {
+      return;
+    }
+
+    val pendingRdds = waitingUnpersistRdds.remove(stage.id).get
+    pendingRdds.foreach { rdd =>
+      waitingUnpersistStages.removeBinding(rdd, stage.id).get(rdd) match {
+        case Some(_) => ()
+        case None =>
+          logInfo(s"Finally unpersisting RDD ${rdd.id} while executing stage ${stage.id}")
+          rdd.unpersist(blocking = false)
+      }
+    }
+  }
+
+  /**
+   * Find RDDs pending unpersist starting with the final stage of a job
+   */
+  private def findWaitingUnpersist(finalStage: Stage) {
+    val waitingForVisit = new ArrayStack[(RDD[_], Int)]
+    def visit(rdd: RDD[_], stageId: Int) {
+      // Store this RDD as ready to be unpersisted when this stage is done
+      if (rdd.unpersistPending) {
+        waitingUnpersistStages.addBinding(rdd, stageId)
+        waitingUnpersistRdds.addBinding(stageId, rdd)
+      }
+
+      for (dep <- rdd.dependencies) {
+        dep match {
+          case shufDep: ShuffleDependency[_, _, _] =>
+            shuffleIdToMapStage.get(shufDep.shuffleId) match {
+              case Some(stage) =>
+                waitingForVisit.push((stage.rdd, stage.id))
+              case None =>
+                throw new SparkException("Map stage not found when traversing for unpersist")
+            }
+          case narrowDep: NarrowDependency[_] =>
+            waitingForVisit.push((narrowDep.rdd, stageId))
+        }
+      }
+    }
+
+    // Start visiting at the final stage of this RDD
+    waitingForVisit.push((finalStage.rdd, finalStage.id))
+    while (waitingForVisit.nonEmpty) {
+      val toVisit = waitingForVisit.pop()
+      visit(toVisit._1, toVisit._2)
+    }
   }
 
   /**
@@ -888,6 +946,7 @@ class DAGScheduler(
     val stageInfos = stageIds.flatMap(id => stageIdToStage.get(id).map(_.latestInfo))
     listenerBus.post(
       SparkListenerJobStart(job.jobId, jobSubmissionTime, stageInfos, properties))
+    findWaitingUnpersist(finalStage)
     submitStage(finalStage)
   }
 
@@ -926,6 +985,7 @@ class DAGScheduler(
     val stageInfos = stageIds.flatMap(id => stageIdToStage.get(id).map(_.latestInfo))
     listenerBus.post(
       SparkListenerJobStart(job.jobId, jobSubmissionTime, stageInfos, properties))
+    findWaitingUnpersist(finalStage)
     submitStage(finalStage)
 
     // If the whole stage has already finished, tell the listener and remove it
@@ -1543,6 +1603,8 @@ class DAGScheduler(
     if (errorMessage.isEmpty) {
       logInfo("%s (%s) finished in %s s".format(stage, stage.name, serviceTime))
       stage.latestInfo.completionTime = Some(clock.getTimeMillis())
+
+      checkPendingUnpersist(stage)
 
       // Clear failure count for this stage, now that it's succeeded.
       // We only limit consecutive failures of stage attempts,so that if a stage is
