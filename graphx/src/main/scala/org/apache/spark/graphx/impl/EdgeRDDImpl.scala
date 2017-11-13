@@ -58,6 +58,11 @@ class EdgeRDDImpl[ED: ClassTag, VD: ClassTag] private[graphx] (
     this
   }
 
+  override def lazyUnpersist(): this.type = {
+    partitionsRDD.lazyUnpersist()
+    this
+  }
+
   override def unpersist(blocking: Boolean = true): this.type = {
     partitionsRDD.unpersist(blocking)
     this
