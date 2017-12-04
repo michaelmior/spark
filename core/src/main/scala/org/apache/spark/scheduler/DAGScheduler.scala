@@ -395,7 +395,9 @@ class DAGScheduler(
    */
   private def findWaitingUnpersist(finalStage: Stage) {
     val waitingForVisit = new ArrayStack[(RDD[_], Int)]
+    val visited = new HashSet[(Int, Int)]
     def visit(rdd: RDD[_], stageId: Int) {
+      visited += ((rdd.id, stageId))
       // Store this RDD as ready to be unpersisted when this stage is done
       if (rdd.unpersistPending) {
         waitingUnpersistStages.addBinding(rdd, stageId)
@@ -421,7 +423,9 @@ class DAGScheduler(
     waitingForVisit.push((finalStage.rdd, finalStage.id))
     while (waitingForVisit.nonEmpty) {
       val toVisit = waitingForVisit.pop()
-      visit(toVisit._1, toVisit._2)
+      if (!visited((toVisit._1.id, toVisit._2))) {
+        visit(toVisit._1, toVisit._2)
+      }
     }
   }
 
