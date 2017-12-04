@@ -418,10 +418,14 @@ class DAGScheduler(
     }
 
     // Start visiting at the final stage of this RDD
+    val visited = new HashSet[(Int, Int)]
     waitingForVisit.push((finalStage.rdd, finalStage.id))
     while (waitingForVisit.nonEmpty) {
       val toVisit = waitingForVisit.pop()
-      visit(toVisit._1, toVisit._2)
+      if (!visited((toVisit._1.id, toVisit._2))) {
+        visit(toVisit._1, toVisit._2)
+        visited += ((toVisit._1.id, toVisit._2))
+      }
     }
   }
 
