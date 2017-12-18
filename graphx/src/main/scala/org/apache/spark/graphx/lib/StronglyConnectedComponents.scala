@@ -19,6 +19,7 @@ package org.apache.spark.graphx.lib
 
 import scala.reflect.ClassTag
 
+import org.apache.spark.Macros
 import org.apache.spark.graphx._
 
 /** Strongly connected components algorithm implementation. */
@@ -49,7 +50,7 @@ object StronglyConnectedComponents {
 
     var numVertices = sccWorkGraph.numVertices
     var iter = 0
-    while (sccWorkGraph.numVertices > 0 && iter < numIter) {
+    Macros.whileLoop(graph.vertices.sparkContext, sccWorkGraph.numVertices > 0 && iter < numIter, {
       iter += 1
       do {
         numVertices = sccWorkGraph.numVertices
@@ -120,7 +121,7 @@ object StronglyConnectedComponents {
           },
           (final1, final2) => final1 || final2)
       }
-    }
+    })
     sccGraph
   }
 

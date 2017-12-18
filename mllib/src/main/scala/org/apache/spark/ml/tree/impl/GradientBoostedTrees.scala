@@ -17,6 +17,7 @@
 
 package org.apache.spark.ml.tree.impl
 
+import org.apache.spark.Macros
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.feature.LabeledPoint
 import org.apache.spark.ml.linalg.Vector
@@ -315,7 +316,7 @@ private[spark] object GradientBoostedTrees extends Logging {
 
     var m = 1
     var doneLearning = false
-    while (m < numIterations && !doneLearning) {
+    Macros.whileLoop(input.sparkContext, m < numIterations && !doneLearning, {
       // Update data with pseudo-residuals
       val data = predError.zip(input).map { case ((pred, _), point) =>
         LabeledPoint(-loss.gradient(pred, point.label), point.features)
@@ -360,7 +361,7 @@ private[spark] object GradientBoostedTrees extends Logging {
         }
       }
       m += 1
-    }
+    })
 
     timer.stop("total")
 

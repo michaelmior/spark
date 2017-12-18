@@ -21,6 +21,7 @@ import scala.collection.mutable.IndexedSeq
 
 import breeze.linalg.{diag, DenseMatrix => BreezeMatrix, DenseVector => BDV, Vector => BV}
 
+import org.apache.spark.Macros
 import org.apache.spark.annotation.Since
 import org.apache.spark.api.java.JavaRDD
 import org.apache.spark.mllib.linalg.{BLAS, DenseMatrix, Matrices, Vector, Vectors}
@@ -198,7 +199,7 @@ class GaussianMixture private (
     var llhp = 0.0            // previous log-likelihood
 
     var iter = 0
-    while (iter < maxIterations && math.abs(llh-llhp) > convergenceTol) {
+    Macros.whileLoop(sc, iter < maxIterations && math.abs(llh-llhp) > convergenceTol, {
       // create and broadcast curried cluster contribution function
       val compute = sc.broadcast(ExpectationSum.add(weights, gaussians)_)
 
@@ -233,7 +234,7 @@ class GaussianMixture private (
       llh = sums.logLikelihood // this is the freshly computed log-likelihood
       iter += 1
       compute.destroy(blocking = false)
-    }
+    })
 
     new GaussianMixtureModel(weights, gaussians)
   }

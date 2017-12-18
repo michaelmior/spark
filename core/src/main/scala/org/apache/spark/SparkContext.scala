@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReferenc
 import scala.collection.JavaConverters._
 import scala.collection.Map
 import scala.collection.generic.Growable
-import scala.collection.mutable.HashMap
+import scala.collection.mutable.{ArrayStack, HashMap}
 import scala.language.implicitConversions
 import scala.reflect.{classTag, ClassTag}
 import scala.util.control.NonFatal
@@ -212,6 +212,13 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _files: Seq[String] = _
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
+
+  private val nextLoop = new AtomicInteger(0)
+
+  /** Register a new loop, returning its ID */
+  private[spark] def newLoop(): Int = nextLoop.getAndIncrement()
+
+  private var _loops: ArrayStack[Int] = _
 
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
@@ -1319,6 +1326,19 @@ class SparkContext(config: SparkConf) extends Logging {
 
   /** Get an RDD that has no partitions or elements. */
   def emptyRDD[T: ClassTag]: RDD[T] = new EmptyRDD[T](this)
+
+  // Methods for tracking higher level application control flow
+
+  private[spark] def pushLoop(): Int = {
+    val loopId = newLoop()
+    _loops += loopId
+    loopId
+  }
+
+  private[spark] def popLoop(loopId: Int): Int = {
+    assert(_loops.top == loopId, "Error when trying to end loop")
+    _loops.pop
+  }
 
   // Methods for creating shared variables
 

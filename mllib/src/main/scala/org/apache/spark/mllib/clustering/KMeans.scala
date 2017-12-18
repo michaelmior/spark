@@ -19,6 +19,7 @@ package org.apache.spark.mllib.clustering
 
 import scala.collection.mutable.ArrayBuffer
 
+import org.apache.spark.Macros
 import org.apache.spark.annotation.Since
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
@@ -295,7 +296,7 @@ class KMeans private (
     instr.foreach(_.logNumFeatures(centers.head.vector.size))
 
     // Execute iterations of Lloyd's algorithm until converged
-    while (iteration < maxIterations && !converged) {
+    Macros.whileLoop(sc, iteration < maxIterations && !converged, {
       val costAccum = sc.doubleAccumulator
       val bcCenters = sc.broadcast(centers)
 
@@ -338,7 +339,7 @@ class KMeans private (
 
       cost = costAccum.value
       iteration += 1
-    }
+    })
 
     val iterationTimeInSeconds = (System.nanoTime() - iterationStartTime) / 1e9
     logInfo(f"Iterations took $iterationTimeInSeconds%.3f seconds.")
@@ -393,7 +394,7 @@ class KMeans private (
     // and new centers are computed in each iteration.
     var step = 0
     val bcNewCentersList = ArrayBuffer[Broadcast[_]]()
-    while (step < initializationSteps) {
+    Macros.whileLoop(data.sparkContext, step < initializationSteps, {
       val bcNewCenters = data.context.broadcast(newCenters)
       bcNewCentersList += bcNewCenters
       val preCosts = costs
@@ -412,7 +413,7 @@ class KMeans private (
       newCenters = chosen.map(_.toDense)
       centers ++= newCenters
       step += 1
-    }
+    })
 
     costs.unpersist(blocking = false)
     bcNewCentersList.foreach(_.destroy(false))

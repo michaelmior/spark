@@ -20,6 +20,7 @@ package org.apache.spark.ml.clustering
 import breeze.linalg.{DenseVector => BDV}
 import org.apache.hadoop.fs.Path
 
+import org.apache.spark.Macros
 import org.apache.spark.annotation.{Experimental, Since}
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.ml.{Estimator, Model}
@@ -364,7 +365,9 @@ class GaussianMixture @Since("2.0.0") (
     var logLikelihoodPrev = 0.0
 
     var iter = 0
-    while (iter < $(maxIter) && math.abs(logLikelihood - logLikelihoodPrev) > $(tol)) {
+    Macros.whileLoop(
+      sc,
+      iter < $(maxIter) && math.abs(logLikelihood - logLikelihoodPrev) > $(tol), {
 
       val bcWeights = instances.sparkContext.broadcast(weights)
       val bcGaussians = instances.sparkContext.broadcast(gaussians)
@@ -412,7 +415,7 @@ class GaussianMixture @Since("2.0.0") (
       logLikelihoodPrev = logLikelihood   // current becomes previous
       logLikelihood = sums.logLikelihood  // this is the freshly computed log-likelihood
       iter += 1
-    }
+    })
 
     val gaussianDists = gaussians.map { case (mean, covVec) =>
       val cov = GaussianMixture.unpackUpperTriangularMatrix(numFeatures, covVec.values)

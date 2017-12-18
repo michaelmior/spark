@@ -21,6 +21,7 @@ import scala.reflect.ClassTag
 
 import breeze.linalg.{Vector => BV}
 
+import org.apache.spark.Macros
 import org.apache.spark.graphx._
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.linalg.{Vector, Vectors}
@@ -113,6 +114,7 @@ object PageRank extends Logging {
 
     val personalized = srcId.isDefined
     val src: VertexId = srcId.getOrElse(-1L)
+    val sc = graph.vertices.sparkContext
 
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each vertex with attribute 1.0.
@@ -132,7 +134,7 @@ object PageRank extends Logging {
 
     var iteration = 0
     var prevRankGraph: Graph[Double, Double] = null
-    while (iteration < numIter) {
+    Macros.whileLoop(sc, iteration < numIter, {
       rankGraph.cache()
 
       // Compute the outgoing rank contributions of each vertex, perform local preaggregation, and
@@ -160,7 +162,7 @@ object PageRank extends Logging {
       prevRankGraph.edges.unpersist(false)
 
       iteration += 1
-    }
+    })
 
     // SPARK-18847 If the graph has sinks (vertices with no outgoing edges) correct the sum of ranks
     normalizeRankSum(rankGraph, personalized)
@@ -221,7 +223,7 @@ object PageRank extends Logging {
       }
 
     var i = 0
-    while (i < numIter) {
+    Macros.whileLoop(sc, i < numIter, {
       val prevRankGraph = rankGraph
       // Propagates the message along outbound edges
       // and adding start nodes back in with activation resetProb
@@ -247,7 +249,7 @@ object PageRank extends Logging {
       logInfo(s"Parallel Personalized PageRank finished iteration $i.")
 
       i += 1
-    }
+    })
 
     // SPARK-18847 If the graph has sinks (vertices with no outgoing edges) correct the sum of ranks
     val rankSums = rankGraph.vertices.values.fold(zero)(_ +:+ _)

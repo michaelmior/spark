@@ -21,6 +21,7 @@ import java.util.Locale
 
 import breeze.linalg.{DenseVector => BDV}
 
+import org.apache.spark.Macros
 import org.apache.spark.annotation.{DeveloperApi, Since}
 import org.apache.spark.api.java.JavaPairRDD
 import org.apache.spark.graphx._
@@ -331,13 +332,13 @@ class LDA private (
     val state = ldaOptimizer.initialize(documents, this)
     var iter = 0
     val iterationTimes = Array.fill[Double](maxIterations)(0)
-    while (iter < maxIterations) {
+    Macros.whileLoop(documents.sparkContext, iter < maxIterations, {
       val start = System.nanoTime()
       state.next()
       val elapsedSeconds = (System.nanoTime() - start) / 1e9
       iterationTimes(iter) = elapsedSeconds
       iter += 1
-    }
+    })
     state.getLDAModel(iterationTimes)
   }
 

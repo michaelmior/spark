@@ -17,6 +17,7 @@
 
 package org.apache.spark.ml.optim
 
+import org.apache.spark.Macros
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.feature.{Instance, OffsetInstance}
 import org.apache.spark.ml.linalg._
@@ -71,7 +72,7 @@ private[ml] class IterativelyReweightedLeastSquares(
     var model: WeightedLeastSquaresModel = initialModel
     var oldModel: WeightedLeastSquaresModel = null
 
-    while (iter < maxIter && !converged) {
+    Macros.whileLoop(instances.sparkContext, iter < maxIter && !converged, {
 
       oldModel = model
 
@@ -106,7 +107,7 @@ private[ml] class IterativelyReweightedLeastSquares(
         logInfo(s"IRLS reached the max number of iterations: $maxIter.")
       }
 
-    }
+    })
 
     new IterativelyReweightedLeastSquaresModel(
       model.coefficients, model.intercept, model.diagInvAtWA, iter)

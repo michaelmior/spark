@@ -19,6 +19,7 @@ package org.apache.spark.graphx
 
 import scala.reflect.ClassTag
 
+import org.apache.spark.Macros
 import org.apache.spark.graphx.util.PeriodicGraphCheckpointer
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
@@ -142,7 +143,7 @@ object Pregel extends Logging {
     // Loop
     var prevG: Graph[VD, ED] = null
     var i = 0
-    while (activeMessages > 0 && i < maxIterations) {
+    Macros.whileLoop(graph.vertices.sparkContext, activeMessages > 0 && i < maxIterations, {
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog)
@@ -168,7 +169,7 @@ object Pregel extends Logging {
       prevG.edges.unpersist(blocking = false)
       // count the iteration
       i += 1
-    }
+    })
     messageCheckpointer.unpersistDataSet()
     graphCheckpointer.deleteAllCheckpoints()
     messageCheckpointer.deleteAllCheckpoints()
