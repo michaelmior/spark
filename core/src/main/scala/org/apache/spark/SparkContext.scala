@@ -218,7 +218,7 @@ class SparkContext(config: SparkConf) extends Logging {
   /** Register a new loop, returning its ID */
   private[spark] def newLoop(): Int = nextLoop.getAndIncrement()
 
-  private var _loops: ArrayStack[Int] = _
+  private var _currentLoop: Option[Int] = None
 
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
@@ -1329,15 +1329,15 @@ class SparkContext(config: SparkConf) extends Logging {
 
   // Methods for tracking higher level application control flow
 
-  private[spark] def pushLoop(): Int = {
+  private[spark] def startLoop(): Int = {
     val loopId = newLoop()
-    _loops += loopId
+    _currentLoop = Some(loopId)
     loopId
   }
 
-  private[spark] def popLoop(loopId: Int): Int = {
-    assert(_loops.top == loopId, "Error when trying to end loop")
-    _loops.pop
+  private[spark] def endLoop(loopId: Int): Unit = {
+    assert(_currentLoop.get == loopId, "Error when trying to end loop")
+    _currentLoop = None
   }
 
   // Methods for creating shared variables

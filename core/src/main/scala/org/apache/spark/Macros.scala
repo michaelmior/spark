@@ -32,11 +32,11 @@ object Macros {
       body: c.Expr[Unit]): c.Expr[Unit] = {
     import c.universe._
     reify {
-      val loopId = sc.splice.pushLoop()
+      val loopId = sc.splice.startLoop()
       while (continueCheck.splice) {
         body.splice
       }
-      sc.splice.popLoop(loopId)
+      sc.splice.endLoop(loopId)
     }
   }
 }
