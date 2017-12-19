@@ -20,6 +20,8 @@ package org.apache.spark.scheduler
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 
+case class IterationLoop(loop: Int, counter: Int)
+
 class IterationManager(
     private[scheduler] val sc: SparkContext)
   extends Logging {
@@ -41,5 +43,12 @@ class IterationManager(
     assert(_currentLoop.get == loopId, "Error when trying to end loop")
     _currentLoop = None
     _currentIteration = -1
+  }
+
+  def registerRdd(rddId: Int): Option[IterationLoop] = {
+    _currentLoop match {
+      case Some(loopId) => Some(IterationLoop(loopId, _currentIteration))
+      case None => None
+    }
   }
 }

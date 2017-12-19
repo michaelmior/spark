@@ -2366,6 +2366,11 @@ class SparkContext(config: SparkConf) extends Logging {
 
   /** Register a new RDD, returning its RDD ID */
   private[spark] def newRddId(): Int = nextRddId.getAndIncrement()
+  private[spark] def registerRdd(): (Int, Option[IterationLoop]) = {
+    val rddId = nextRddId.getAndIncrement()
+    val loop = iterationManager.registerRdd(rddId)
+    (rddId, loop)
+  }
 
   /**
    * Registers listeners specified in spark.extraListeners, then starts the listener bus.
