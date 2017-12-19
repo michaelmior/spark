@@ -202,6 +202,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _taskScheduler: TaskScheduler = _
   private var _heartbeatReceiver: RpcEndpointRef = _
   @volatile private var _dagScheduler: DAGScheduler = _
+  private var _iterationManager: IterationManager = _
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
@@ -217,9 +218,6 @@ class SparkContext(config: SparkConf) extends Logging {
 
   /** Register a new loop, returning its ID */
   private[spark] def newLoop(): Int = nextLoop.getAndIncrement()
-
-  private var _currentLoop: Option[Int] = None
-  private var _currentIteration: Int = -1
 
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
@@ -309,6 +307,11 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def dagScheduler: DAGScheduler = _dagScheduler
   private[spark] def dagScheduler_=(ds: DAGScheduler): Unit = {
     _dagScheduler = ds
+  }
+
+  private[spark] def iterationManager: IterationManager = _iterationManager
+  private[spark] def iterationManager_=(im: IterationManager): Unit = {
+    _iterationManager = im
   }
 
   /**
@@ -1331,19 +1334,15 @@ class SparkContext(config: SparkConf) extends Logging {
   // Methods for tracking higher level application control flow
 
   private[spark] def startLoop(): Int = {
-    val loopId = newLoop()
-    _currentLoop = Some(loopId)
-    loopId
+    iterationManager.startLoop()
   }
 
   private[spark] def iterateLoop(): Unit = {
-    _currentIteration += 1
+    iterationManager.iterateLoop()
   }
 
   private[spark] def endLoop(loopId: Int): Unit = {
-    assert(_currentLoop.get == loopId, "Error when trying to end loop")
-    _currentLoop = None
-    _currentIteration = -1
+    iterationManager.endLoop(loopId)
   }
 
   // Methods for creating shared variables
