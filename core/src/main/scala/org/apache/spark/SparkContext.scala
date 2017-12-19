@@ -219,6 +219,7 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def newLoop(): Int = nextLoop.getAndIncrement()
 
   private var _currentLoop: Option[Int] = None
+  private var _currentIteration: Int = -1
 
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
@@ -1335,9 +1336,14 @@ class SparkContext(config: SparkConf) extends Logging {
     loopId
   }
 
+  private[spark] def iterateLoop(): Unit = {
+    _currentIteration += 1
+  }
+
   private[spark] def endLoop(loopId: Int): Unit = {
     assert(_currentLoop.get == loopId, "Error when trying to end loop")
     _currentLoop = None
+    _currentIteration = -1
   }
 
   // Methods for creating shared variables

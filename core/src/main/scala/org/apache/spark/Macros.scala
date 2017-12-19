@@ -34,6 +34,7 @@ object Macros {
     reify {
       val loopId = sc.splice.startLoop()
       while (continueCheck.splice) {
+        sc.splice.iterateLoop()
         body.splice
       }
       sc.splice.endLoop(loopId)
