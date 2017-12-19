@@ -17,6 +17,8 @@
 
 package org.apache.spark.scheduler
 
+import scala.collection.mutable.{HashMap, HashSet}
+
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 
@@ -26,28 +28,32 @@ class IterationManager(
     private[scheduler] val sc: SparkContext)
   extends Logging {
 
-  private var _currentLoop: Option[Int] = None
-  private var _currentIteration: Int = -1
+  private var currentLoop: Option[Int] = None
+  private var currentIteration: Int = -1
+  private val loopRdds = new HashMap[Int, HashMap[Int, HashSet[Int]]]
 
   def startLoop(): Int = {
     val loopId = sc.newLoop()
-    _currentLoop = Some(loopId)
+    currentLoop = Some(loopId)
     loopId
   }
 
   def iterateLoop(): Unit = {
-    _currentIteration += 1
+    currentIteration += 1
   }
 
   def endLoop(loopId: Int): Unit = {
-    assert(_currentLoop.get == loopId, "Error when trying to end loop")
-    _currentLoop = None
-    _currentIteration = -1
+    assert(currentLoop.get == loopId, "Error when trying to end loop")
+    currentLoop = None
+    currentIteration = -1
   }
 
   def registerRdd(rddId: Int): Option[IterationLoop] = {
-    _currentLoop match {
-      case Some(loopId) => Some(IterationLoop(loopId, _currentIteration))
+    currentLoop match {
+      case Some(loopId) =>
+        val rdds = loopRdds.getOrElseUpdate(loopId, new HashMap[Int, HashSet[Int]]())
+        rdds.getOrElseUpdate(currentIteration, new HashSet[Int]()) += rddId
+        Some(IterationLoop(loopId, currentIteration))
       case None => None
     }
   }
