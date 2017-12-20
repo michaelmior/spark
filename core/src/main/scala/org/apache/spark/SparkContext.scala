@@ -2366,9 +2366,9 @@ class SparkContext(config: SparkConf) extends Logging {
 
   /** Register a new RDD, returning its RDD ID */
   private[spark] def newRddId(): Int = nextRddId.getAndIncrement()
-  private[spark] def registerRdd(): (Int, Option[IterationLoop]) = {
+  private[spark] def registerRdd(rdd: RDD[_]): (Int, Option[IterationLoop]) = {
     val rddId = nextRddId.getAndIncrement()
-    val loop = iterationManager.registerRdd(rddId)
+    val loop = iterationManager.registerRdd(rdd)
     (rddId, loop)
   }
 

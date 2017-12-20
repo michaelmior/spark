@@ -17,10 +17,12 @@
 
 package org.apache.spark.scheduler
 
-import scala.collection.mutable.{HashMap, HashSet}
+import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.spark._
 import org.apache.spark.internal.Logging
+import org.apache.spark.rdd.RDD
+import org.apache.spark.util._
 
 case class IterationLoop(loop: Int, counter: Int)
 
@@ -30,7 +32,7 @@ class IterationManager(
 
   private var currentLoop: Option[Int] = None
   private var currentIteration: Int = -1
-  private val loopRdds = new HashMap[Int, HashMap[Int, HashSet[Int]]]
+  private val loopRdds = new HashMap[CallSite, ArrayBuffer[RDD[_]]]
 
   def startLoop(): Int = {
     val loopId = sc.newLoop()
@@ -48,11 +50,11 @@ class IterationManager(
     currentIteration = -1
   }
 
-  def registerRdd(rddId: Int): Option[IterationLoop] = {
+  def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
     currentLoop match {
       case Some(loopId) =>
-        val rdds = loopRdds.getOrElseUpdate(loopId, new HashMap[Int, HashSet[Int]]())
-        rdds.getOrElseUpdate(currentIteration, new HashSet[Int]()) += rddId
+        val rdds = loopRdds.getOrElseUpdate(rdd.creationSite, new ArrayBuffer[RDD[_]]())
+        rdds += rdd
         Some(IterationLoop(loopId, currentIteration))
       case None => None
     }
