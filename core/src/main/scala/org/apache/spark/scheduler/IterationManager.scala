@@ -59,4 +59,20 @@ class IterationManager(
       case None => None
     }
   }
+
+  def unregisterAncestors(rdd: RDD[_], keepPrevious: Int = 0): Seq[RDD[_]] = {
+    loopRdds.get(rdd.creationSite) match {
+      case Some(rdds) =>
+        val ancestors = new ArrayBuffer[RDD[_]]
+
+        rdds.foreach { ancestor =>
+          if (ancestor.loop.get.counter < rdd.loop.get.counter - keepPrevious) {
+            ancestors += ancestor
+          }
+        }
+
+        ancestors
+      case None => Seq.empty[RDD[_]]
+    }
+  }
 }
