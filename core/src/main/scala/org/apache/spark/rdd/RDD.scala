@@ -159,6 +159,16 @@ abstract class RDD[T: ClassTag](
     this
   }
 
+  private[spark] def implicitPersist(newLevel: StorageLevel): this.type = {
+    if (storageLevel != StorageLevel.NONE && newLevel != storageLevel) {
+      throw new UnsupportedOperationException(
+        "Cannot implicitly persist an RDD that was already persisted")
+    }
+    persist(newLevel)
+    implicitPersist = true
+    this
+  }
+
   /**
    * Mark this RDD for persisting using the specified level.
    *
@@ -178,6 +188,7 @@ abstract class RDD[T: ClassTag](
       sc.persistRDD(this)
     }
     storageLevel = newLevel
+    implicitPersist = false
     this
   }
 
@@ -1651,6 +1662,7 @@ abstract class RDD[T: ClassTag](
   // =======================================================================
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
+  private var implicitPersist: Boolean = false
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
   @transient private[spark] val creationSite = sc.getCallSite()
