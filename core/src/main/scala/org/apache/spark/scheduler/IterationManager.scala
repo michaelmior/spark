@@ -32,7 +32,8 @@ class IterationManager(
 
   private var currentLoop: Option[Int] = None
   private var currentIteration: Int = -1
-  private val loopRdds = new HashMap[CallSite, ArrayBuffer[RDD[_]]]
+  private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
+  private val ancestorRdds = new HashMap[CallSite, ArrayBuffer[RDD[_]]]
 
   def startLoop(): Int = {
     val loopId = sc.newLoop()
@@ -53,15 +54,22 @@ class IterationManager(
   def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
     currentLoop match {
       case Some(loopId) =>
-        val rdds = loopRdds.getOrElseUpdate(rdd.creationSite, new ArrayBuffer[RDD[_]]())
-        rdds += rdd
+        val ancestors = ancestorRdds.getOrElseUpdate(rdd.creationSite, new ArrayBuffer[RDD[_]]())
+        ancestors += rdd
+
+        // Record RDDs generated in the second loop iteration since this
+        // is the first time we can see loop dependencies
+        if (currentIteration == 1) {
+          val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
+          rdds += rdd
+        }
         Some(IterationLoop(loopId, currentIteration))
       case None => None
     }
   }
 
   def unregisterAncestors(rdd: RDD[_], keepPrevious: Int = 0): Seq[RDD[_]] = {
-    loopRdds.get(rdd.creationSite) match {
+    ancestorRdds.get(rdd.creationSite) match {
       case Some(rdds) =>
         val ancestors = new ArrayBuffer[RDD[_]]
 
