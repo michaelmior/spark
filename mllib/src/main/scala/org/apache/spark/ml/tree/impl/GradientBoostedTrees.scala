@@ -316,7 +316,28 @@ private[spark] object GradientBoostedTrees extends Logging {
 
     var m = 1
     var doneLearning = false
-    Macros.whileLoop(input.sparkContext, m < numIterations && !doneLearning, {
+    Macros.whileLoop(input.sparkContext, {
+      m < numIterations && (!validate || {
+        // Stop training early if
+        // 1. Reduction in error is less than the validationTol or
+        // 2. If the error increases, that is if the model is overfit.
+        // We want the model returned corresponding to the best validation error.
+
+        validatePredError = updatePredictionError(
+          validationInput, validatePredError, baseLearnerWeights(m), baseLearners(m), loss)
+        validatePredErrorCheckpointer.update(validatePredError)
+        val currentValidateError = validatePredError.values.mean()
+        if (bestValidateError - currentValidateError < validationTol * Math.max(
+          currentValidateError, 0.01)) {
+          doneLearning = true
+        } else if (currentValidateError < bestValidateError) {
+          bestValidateError = currentValidateError
+          bestM = m + 1
+        }
+
+        doneLearning
+      })
+    }, {
       // Update data with pseudo-residuals
       val data = predError.zip(input).map { case ((pred, _), point) =>
         LabeledPoint(-loss.gradient(pred, point.label), point.features)
@@ -341,25 +362,6 @@ private[spark] object GradientBoostedTrees extends Logging {
         input, predError, baseLearnerWeights(m), baseLearners(m), loss)
       predErrorCheckpointer.update(predError)
       logDebug("error of gbt = " + predError.values.mean())
-
-      if (validate) {
-        // Stop training early if
-        // 1. Reduction in error is less than the validationTol or
-        // 2. If the error increases, that is if the model is overfit.
-        // We want the model returned corresponding to the best validation error.
-
-        validatePredError = updatePredictionError(
-          validationInput, validatePredError, baseLearnerWeights(m), baseLearners(m), loss)
-        validatePredErrorCheckpointer.update(validatePredError)
-        val currentValidateError = validatePredError.values.mean()
-        if (bestValidateError - currentValidateError < validationTol * Math.max(
-          currentValidateError, 0.01)) {
-          doneLearning = true
-        } else if (currentValidateError < bestValidateError) {
-          bestValidateError = currentValidateError
-          bestM = m + 1
-        }
-      }
       m += 1
     })
 
