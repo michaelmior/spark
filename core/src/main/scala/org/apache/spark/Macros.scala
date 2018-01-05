@@ -40,7 +40,7 @@ object Macros {
         // If this is not the first iteration,
         // advance the counter before continuing
         if (!first) {
-          sc.splice.iterateLoop()
+          sc.splice.iterateLoop(loopId)
         }
         first = false
 

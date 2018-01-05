@@ -33,6 +33,7 @@ class IterationManager(
   private var currentLoop: Option[Int] = None
   private var currentIteration: Int = -1
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
+  private val useCount = new HashMap[(Int, CallSite), Int]
   private val ancestorRdds = new HashMap[CallSite, ArrayBuffer[RDD[_]]]
 
   def startLoop(): Int = {
@@ -41,7 +42,24 @@ class IterationManager(
     loopId
   }
 
-  def iterateLoop(): Unit = {
+  def iterateLoop(loopId: Int): Unit = {
+    if (currentIteration == 1) {
+      loopRdds(loopId).foreach { rdd =>
+        if (rdd.loop.get.counter == 1) {
+        // Record RDDs generated in the second loop iteration since this
+        // is the first time we can see loop dependencies
+          useCount((loopId, rdd.creationSite)) =
+            useCount.getOrElse((loopId, rdd.creationSite), 0) + 1
+        }
+      }
+    }
+
+    loopRdds(loopId).foreach { rdd =>
+      if (rdd.loop.get.counter < currentIteration) {
+        rdd.unpersist()
+      }
+    }
+
     currentIteration += 1
   }
 
@@ -57,12 +75,16 @@ class IterationManager(
         val ancestors = ancestorRdds.getOrElseUpdate(rdd.creationSite, new ArrayBuffer[RDD[_]]())
         ancestors += rdd
 
-        // Record RDDs generated in the second loop iteration since this
-        // is the first time we can see loop dependencies
-        if (currentIteration == 1) {
-          val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
-          rdds += rdd
+        val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
+        rdds += rdd
+
+        if (currentIteration > 1) {
+          useCount.get((loopId, rdd.creationSite)) match {
+            case Some(count) => rdd.implicitPersist()
+            case None => ()
+          }
         }
+
         Some(IterationLoop(loopId, currentIteration))
       case None => None
     }

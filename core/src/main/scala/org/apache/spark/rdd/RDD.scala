@@ -159,7 +159,7 @@ abstract class RDD[T: ClassTag](
     this
   }
 
-  private[spark] def implicitPersist(newLevel: StorageLevel): this.type = {
+  private[spark] def implicitPersist(newLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK): this.type = {
     if (storageLevel != StorageLevel.NONE && newLevel != storageLevel) {
       throw new UnsupportedOperationException(
         "Cannot implicitly persist an RDD that was already persisted")
@@ -224,6 +224,7 @@ abstract class RDD[T: ClassTag](
    * @param blocking Whether to block until all blocks are deleted.
    * @return This RDD.
    */
+
   def unpersist(blocking: Boolean = true): this.type = {
     logInfo("Removing RDD " + id + " from persistence list")
     sc.unpersistRDD(id, blocking)

@@ -1337,8 +1337,8 @@ class SparkContext(config: SparkConf) extends Logging {
     iterationManager.startLoop()
   }
 
-  private[spark] def iterateLoop(): Unit = {
-    iterationManager.iterateLoop()
+  private[spark] def iterateLoop(loopId: Int): Unit = {
+    iterationManager.iterateLoop(loopId)
   }
 
   private[spark] def endLoop(loopId: Int): Unit = {
