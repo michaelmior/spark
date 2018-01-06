@@ -505,6 +505,7 @@ class SparkContext(config: SparkConf) extends Logging {
     _taskScheduler = ts
     _dagScheduler = new DAGScheduler(this)
     _heartbeatReceiver.ask[Boolean](TaskSchedulerIsSet)
+    _iterationManager = new IterationManager(this)
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
