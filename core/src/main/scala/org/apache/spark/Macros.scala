@@ -19,7 +19,6 @@ package org.apache.spark
 
 import scala.language.experimental.macros
 import scala.reflect.macros.blackbox
-import scala.util.control.Breaks._
 
 object Macros {
   def whileLoop(
@@ -34,9 +33,9 @@ object Macros {
     import c.universe._
     reify {
       val loopId = sc.splice.startLoop()
+      var break = false
       var first = true
-      // while (continueCheck.splice) {
-      breakable { while (true) {
+      while (!break) {
         // If this is not the first iteration,
         // advance the counter before continuing
         if (!first) {
@@ -45,13 +44,13 @@ object Macros {
         first = false
 
         if (!continueCheck.splice) {
-          break
+          break = true
+        } else {
+          body.splice
         }
-
-        body.splice
       }
 
       sc.splice.endLoop(loopId)
-    } }
+    }
   }
 }
