@@ -135,8 +135,6 @@ object PageRank extends Logging {
     var iteration = 0
     var prevRankGraph: Graph[Double, Double] = null
     Macros.whileLoop(sc, iteration < numIter, {
-      rankGraph.cache()
-
       // Compute the outgoing rank contributions of each vertex, perform local preaggregation, and
       // do the final aggregation at the receiving vertices. Requires a shuffle for aggregation.
       val rankUpdates = rankGraph.aggregateMessages[Double](
@@ -154,11 +152,9 @@ object PageRank extends Logging {
 
       rankGraph = rankGraph.outerJoinVertices(rankUpdates) {
         (id, oldRank, msgSumOpt) => rPrb(src, id) + (1.0 - resetProb) * msgSumOpt.getOrElse(0.0)
-      }.cache()
+      }
 
       logInfo(s"PageRank finished iteration $iteration.")
-      prevRankGraph.vertices.lazyUnpersist()
-      prevRankGraph.edges.lazyUnpersist()
 
       iteration += 1
     })
@@ -239,10 +235,7 @@ object PageRank extends Logging {
             zero
           }
           popActivations +:+ resetActivations
-        }.cache()
-
-      prevRankGraph.vertices.lazyUnpersist()
-      prevRankGraph.edges.lazyUnpersist()
+        }
 
       logInfo(s"Parallel Personalized PageRank finished iteration $i.")
 
@@ -315,7 +308,6 @@ object PageRank extends Logging {
       .mapVertices { (id, attr) =>
         if (id == src) (0.0, Double.NegativeInfinity) else (0.0, 0.0)
       }
-      .cache()
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel
