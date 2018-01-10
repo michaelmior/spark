@@ -161,9 +161,8 @@ abstract class RDD[T: ClassTag](
 
   private[spark] def implicitPersist(
       newLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK): this.type = {
-    if (storageLevel != StorageLevel.NONE && newLevel != storageLevel) {
-      throw new UnsupportedOperationException(
-        "Cannot implicitly persist an RDD that was already persisted")
+    if (storageLevel != StorageLevel.NONE) {
+      return this
     }
     persist(newLevel)
     implicitPersist = true
