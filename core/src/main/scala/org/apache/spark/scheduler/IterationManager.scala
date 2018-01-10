@@ -22,6 +22,7 @@ import scala.collection.mutable.{ArrayBuffer, HashMap}
 import org.apache.spark._
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util._
 
 case class IterationLoop(loop: Int, counter: Int)
@@ -31,10 +32,10 @@ class IterationManager(
   extends Logging {
 
   private var currentLoop: Option[Int] = None
-  private var currentIteration: Int = -1
+  private var currentIteration: Int = 0
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
-  private val useCount = new HashMap[(Int, CallSite), Int]
-  private val ancestorRdds = new HashMap[CallSite, ArrayBuffer[RDD[_]]]
+  private val useCount = new HashMap[(Int, Int), Int]
+  private val ancestorRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
 
   def startLoop(): Int = {
     val loopId = sc.newLoop()
@@ -46,10 +47,12 @@ class IterationManager(
     if (currentIteration == 1) {
       loopRdds(loopId).foreach { rdd =>
         if (rdd.loop.get.counter == 1) {
-        // Record RDDs generated in the second loop iteration since this
-        // is the first time we can see loop dependencies
-          useCount((loopId, rdd.creationSite)) =
-            useCount.getOrElse((loopId, rdd.creationSite), 0) + 1
+          // Record RDDs generated in the second loop iteration since this
+          // is the first time we can see loop dependencies
+          rdd.dependencies.foreach{ dep =>
+            useCount((loopId, dep.rdd.callSiteTag)) =
+              useCount.getOrElse((loopId, dep.rdd.callSiteTag), 0) + 1
+          }
         }
       }
     }
@@ -72,15 +75,18 @@ class IterationManager(
   def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
     currentLoop match {
       case Some(loopId) =>
-        val ancestors = ancestorRdds.getOrElseUpdate(rdd.creationSite, new ArrayBuffer[RDD[_]]())
+        val ancestors = ancestorRdds.getOrElseUpdate(rdd.callSiteTag, new ArrayBuffer[RDD[_]]())
         ancestors += rdd
 
         val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
         rdds += rdd
 
         if (currentIteration > 1) {
-          useCount.get((loopId, rdd.creationSite)) match {
-            case Some(count) => rdd.implicitPersist()
+          useCount.get((loopId, rdd.callSiteTag)) match {
+            case Some(count) =>
+              if (count > 1) {
+                rdd.implicitPersist()
+              }
             case None => ()
           }
         }
@@ -91,7 +97,7 @@ class IterationManager(
   }
 
   def unregisterAncestors(rdd: RDD[_], keepPrevious: Int = 0): Seq[RDD[_]] = {
-    ancestorRdds.get(rdd.creationSite) match {
+    ancestorRdds.get(rdd.callSiteTag) match {
       case Some(rdds) =>
         val ancestors = new ArrayBuffer[RDD[_]]
 

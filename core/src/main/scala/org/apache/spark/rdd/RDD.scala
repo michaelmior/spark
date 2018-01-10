@@ -147,6 +147,11 @@ abstract class RDD[T: ClassTag](
   /** The SparkContext that created this RDD. */
   def sparkContext: SparkContext = sc
 
+  /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
+  @transient private[spark] val creationSite = sc.getCallSite()
+
+  private[spark] val callSiteTag = creationSite.longForm.hashCode
+
   /** A unique ID for this RDD (within its SparkContext). */
   val (id: Int, loop: Option[IterationLoop]) = sc.registerRdd(this)
 
@@ -1675,9 +1680,6 @@ abstract class RDD[T: ClassTag](
   private var implicitPersist: Boolean = false
 
   private var pendingUnpersist: Boolean = false
-
-  /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
-  @transient private[spark] val creationSite = sc.getCallSite()
 
   /**
    * The scope associated with the operation that created this RDD.
