@@ -58,7 +58,7 @@ object StronglyConnectedComponents {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
         }.outerJoinVertices(sccWorkGraph.inDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
-        }.cache()
+        }
 
         // get all vertices to be removed
         val finalVertices = sccWorkGraph.vertices
@@ -68,16 +68,12 @@ object StronglyConnectedComponents {
         // write values to sccGraph
         sccGraph = sccGraph.outerJoinVertices(finalVertices) {
           (vid, scc, opt) => opt.getOrElse(scc)
-        }.cache()
-        // materialize vertices and edges
-        sccGraph.vertices.count()
-        sccGraph.edges.count()
-        // sccGraph materialized so, unpersist can be done on previous
-        prevSccGraph.unpersist(blocking = false)
+        }
+
         prevSccGraph = sccGraph
 
         // only keep vertices that are not final
-        sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2).cache()
+        sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2)
       } while (sccWorkGraph.numVertices < numVertices)
 
       // if iter < numIter at this point sccGraph that is returned
