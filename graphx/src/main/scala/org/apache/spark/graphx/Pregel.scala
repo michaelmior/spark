@@ -20,10 +20,8 @@ package org.apache.spark.graphx
 import scala.reflect.ClassTag
 
 import org.apache.spark.Macros
-import org.apache.spark.graphx.util.PeriodicGraphCheckpointer
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
-import org.apache.spark.rdd.util.PeriodicRDDCheckpointer
 
 /**
  * Implements a Pregel-like bulk-synchronous message-passing API.
@@ -129,15 +127,9 @@ object Pregel extends Logging {
     val checkpointInterval = graph.vertices.sparkContext.getConf
       .getInt("spark.graphx.pregel.checkpointInterval", -1)
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg))
-    val graphCheckpointer = new PeriodicGraphCheckpointer[VD, ED](
-      checkpointInterval, graph.vertices.sparkContext)
-    graphCheckpointer.update(g)
 
     // compute the messages
     var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg)
-    val messageCheckpointer = new PeriodicRDDCheckpointer[(VertexId, A)](
-      checkpointInterval, graph.vertices.sparkContext)
-    messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
     var activeMessages = messages.count()
 
     // Loop
@@ -147,7 +139,6 @@ object Pregel extends Logging {
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog)
-      graphCheckpointer.update(g)
 
       val oldMessages = messages
       // Send new messages, skipping edges where neither side received a message. We must cache
@@ -158,21 +149,13 @@ object Pregel extends Logging {
       // The call to count() materializes `messages` and the vertices of `g`. This hides oldMessages
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).
-      messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
       activeMessages = messages.count()
 
       logInfo("Pregel finished iteration " + i)
 
-      // Unpersist the RDDs hidden by newly-materialized RDDs
-      oldMessages.unpersist(blocking = false)
-      prevG.unpersistVertices(blocking = false)
-      prevG.edges.unpersist(blocking = false)
       // count the iteration
       i += 1
     })
-    messageCheckpointer.unpersistDataSet()
-    graphCheckpointer.deleteAllCheckpoints()
-    messageCheckpointer.deleteAllCheckpoints()
     g
   } // end of apply
 
