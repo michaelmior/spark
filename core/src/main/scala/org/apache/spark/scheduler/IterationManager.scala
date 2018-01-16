@@ -58,7 +58,9 @@ class IterationManager(
     }
 
     loopRdds(loopId).foreach { rdd =>
-      if (rdd.loop.get.counter < currentIteration && rdd.getStorageLevel != StorageLevel.NONE) {
+      if (rdd.loop.get.counter < currentIteration &&
+          rdd.getStorageLevel != StorageLevel.NONE &&
+          rdd.implicitlyPersisted) {
         rdd.lazyUnpersist()
       }
     }

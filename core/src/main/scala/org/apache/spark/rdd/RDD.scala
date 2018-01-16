@@ -170,7 +170,7 @@ abstract class RDD[T: ClassTag](
       return this
     }
     persist(newLevel)
-    implicitPersist = true
+    implicitlyPersisted = true
     this
   }
 
@@ -193,7 +193,7 @@ abstract class RDD[T: ClassTag](
       sc.persistRDD(this)
     }
     storageLevel = newLevel
-    implicitPersist = false
+    implicitlyPersisted = false
     this
   }
 
@@ -1677,7 +1677,7 @@ abstract class RDD[T: ClassTag](
   // =======================================================================
 
   private var storageLevel: StorageLevel = StorageLevel.NONE
-  private var implicitPersist: Boolean = false
+  private[spark] var implicitlyPersisted: Boolean = false
 
   private var pendingUnpersist: Boolean = false
 
