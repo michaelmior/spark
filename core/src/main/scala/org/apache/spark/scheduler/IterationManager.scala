@@ -20,6 +20,7 @@ package org.apache.spark.scheduler
 import scala.collection.mutable.{ArrayBuffer, HashMap}
 
 import org.apache.spark._
+import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
@@ -30,6 +31,8 @@ case class IterationLoop(loop: Int, counter: Int)
 class IterationManager(
     private[scheduler] val sc: SparkContext)
   extends Logging {
+
+  private val manageCaching = sc.conf.get(ITERATION_MANAGE_CACHING)
 
   private var currentLoop: Option[Int] = None
   private var currentIteration: Int = 0
@@ -44,6 +47,11 @@ class IterationManager(
   }
 
   def iterateLoop(loopId: Int): Unit = {
+    if (!manageCaching) {
+      currentIteration += 1
+      return
+    }
+
     if (currentIteration == 1) {
       loopRdds(loopId).foreach { rdd =>
         if (rdd.loop.get.counter == 1) {
@@ -77,6 +85,10 @@ class IterationManager(
   def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
     currentLoop match {
       case Some(loopId) =>
+        if (!manageCaching) {
+          return Some(IterationLoop(loopId, currentIteration))
+        }
+
         val ancestors = ancestorRdds.getOrElseUpdate(rdd.callSiteTag, new ArrayBuffer[RDD[_]]())
         ancestors += rdd
 
