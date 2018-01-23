@@ -23,6 +23,7 @@ import breeze.linalg.{Vector => BV}
 
 import org.apache.spark.Macros
 import org.apache.spark.graphx._
+import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 
@@ -115,6 +116,7 @@ object PageRank extends Logging {
     val personalized = srcId.isDefined
     val src: VertexId = srcId.getOrElse(-1L)
     val sc = graph.vertices.sparkContext
+    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
 
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each vertex with attribute 1.0.
@@ -135,6 +137,10 @@ object PageRank extends Logging {
     var iteration = 0
     var prevRankGraph: Graph[Double, Double] = null
     Macros.whileLoop(sc, iteration < numIter, {
+      if (!manageCaching) {
+        rankGraph.cache()
+      }
+
       // Compute the outgoing rank contributions of each vertex, perform local preaggregation, and
       // do the final aggregation at the receiving vertices. Requires a shuffle for aggregation.
       val rankUpdates = rankGraph.aggregateMessages[Double](
@@ -152,6 +158,12 @@ object PageRank extends Logging {
 
       rankGraph = rankGraph.outerJoinVertices(rankUpdates) {
         (id, oldRank, msgSumOpt) => rPrb(src, id) + (1.0 - resetProb) * msgSumOpt.getOrElse(0.0)
+      }
+
+      if (!manageCaching) {
+        rankGraph.cache()
+        prevRankGraph.vertices.lazyUnpersist()
+        prevRankGraph.edges.lazyUnpersist()
       }
 
       logInfo(s"PageRank finished iteration $iteration.")
@@ -201,6 +213,7 @@ object PageRank extends Logging {
       (vid, v)
     }.toMap
     val sc = graph.vertices.sparkContext
+    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
     val sourcesInitMapBC = sc.broadcast(sourcesInitMap)
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each source vertex with attribute 1.0.
@@ -236,6 +249,11 @@ object PageRank extends Logging {
           }
           popActivations +:+ resetActivations
         }
+      if (!manageCaching) {
+        rankGraph.cache()
+        prevRankGraph.vertices.lazyUnpersist()
+        prevRankGraph.edges.lazyUnpersist()
+      }
 
       logInfo(s"Parallel Personalized PageRank finished iteration $i.")
 
@@ -308,6 +326,11 @@ object PageRank extends Logging {
       .mapVertices { (id, attr) =>
         if (id == src) (0.0, Double.NegativeInfinity) else (0.0, 0.0)
       }
+
+    val manageCaching = graph.vertices.sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
+    if (!manageCaching) {
+      pagerankGraph.cache()
+    }
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel

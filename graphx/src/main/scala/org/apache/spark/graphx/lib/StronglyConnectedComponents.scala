@@ -21,6 +21,7 @@ import scala.reflect.ClassTag
 
 import org.apache.spark.Macros
 import org.apache.spark.graphx._
+import org.apache.spark.internal.config._
 
 /** Strongly connected components algorithm implementation. */
 object StronglyConnectedComponents {
@@ -39,6 +40,8 @@ object StronglyConnectedComponents {
   def run[VD: ClassTag, ED: ClassTag](graph: Graph[VD, ED], numIter: Int): Graph[VertexId, ED] = {
     require(numIter > 0, s"Number of iterations must be greater than 0," +
       s" but got ${numIter}")
+
+    val manageCaching = graph.vertices.sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
 
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
@@ -59,6 +62,9 @@ object StronglyConnectedComponents {
         }.outerJoinVertices(sccWorkGraph.inDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
         }
+        if (!manageCaching) {
+          sccWorkGraph.cache()
+        }
 
         // get all vertices to be removed
         val finalVertices = sccWorkGraph.vertices
@@ -70,10 +76,21 @@ object StronglyConnectedComponents {
           (vid, scc, opt) => opt.getOrElse(scc)
         }
 
-        prevSccGraph = sccGraph
+        if (!manageCaching) {
+          sccGraph.cache()
+          // materialize vertices and edges
+          sccGraph.vertices.count()
+          sccGraph.edges.count()
+          // sccGraph materialized so, unpersist can be done on previous
+          prevSccGraph.unpersist(blocking = false)
+          prevSccGraph = sccGraph
+        }
 
         // only keep vertices that are not final
         sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2)
+        if (!manageCaching) {
+          sccWorkGraph.cache()
+        }
       } while (sccWorkGraph.numVertices < numVertices)
 
       // if iter < numIter at this point sccGraph that is returned

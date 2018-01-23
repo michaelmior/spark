@@ -47,11 +47,6 @@ class IterationManager(
   }
 
   def iterateLoop(loopId: Int): Unit = {
-    if (!manageCaching) {
-      currentIteration += 1
-      return
-    }
-
     if (currentIteration == 1) {
       loopRdds(loopId).foreach { rdd =>
         if (rdd.loop.get.counter == 1) {
@@ -68,7 +63,7 @@ class IterationManager(
     loopRdds(loopId).foreach { rdd =>
       if (rdd.loop.get.counter < currentIteration &&
           rdd.getStorageLevel != StorageLevel.NONE &&
-          rdd.implicitlyPersisted) {
+          rdd.implicitlyPersisted && manageCaching) {
         rdd.lazyUnpersist()
       }
     }
@@ -85,10 +80,6 @@ class IterationManager(
   def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
     currentLoop match {
       case Some(loopId) =>
-        if (!manageCaching) {
-          return Some(IterationLoop(loopId, currentIteration))
-        }
-
         val ancestors = ancestorRdds.getOrElseUpdate(rdd.callSiteTag, new ArrayBuffer[RDD[_]]())
         ancestors += rdd
 
@@ -98,7 +89,7 @@ class IterationManager(
         if (currentIteration > 1) {
           useCount.get((loopId, rdd.callSiteTag)) match {
             case Some(count) =>
-              if (count > 1) {
+              if (count > 1 && manageCaching) {
                 rdd.implicitPersist()
               }
             case None => ()

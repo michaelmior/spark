@@ -20,8 +20,11 @@ package org.apache.spark.graphx
 import scala.reflect.ClassTag
 
 import org.apache.spark.Macros
+import org.apache.spark.graphx.util.PeriodicGraphCheckpointer
+import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.util.PeriodicRDDCheckpointer
 
 /**
  * Implements a Pregel-like bulk-synchronous message-passing API.
@@ -124,12 +127,24 @@ object Pregel extends Logging {
     require(maxIterations > 0, s"Maximum number of iterations must be greater than 0," +
       s" but got ${maxIterations}")
 
+    val manageCaching = graph.vertices.sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
     val checkpointInterval = graph.vertices.sparkContext.getConf
       .getInt("spark.graphx.pregel.checkpointInterval", -1)
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg))
+    val graphCheckpointer = new PeriodicGraphCheckpointer[VD, ED](
+      checkpointInterval, graph.vertices.sparkContext)
+
+    if (!manageCaching) {
+      graphCheckpointer.update(g)
+    }
 
     // compute the messages
     var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg)
+    val messageCheckpointer = new PeriodicRDDCheckpointer[(VertexId, A)](
+      checkpointInterval, graph.vertices.sparkContext)
+    if (!manageCaching) {
+      messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
+    }
     var activeMessages = messages.count()
 
     // Loop
@@ -140,6 +155,10 @@ object Pregel extends Logging {
       prevG = g
       g = g.joinVertices(messages)(vprog)
 
+      if (!manageCaching) {
+        graphCheckpointer.update(g)
+      }
+
       val oldMessages = messages
       // Send new messages, skipping edges where neither side received a message. We must cache
       // messages so it can be materialized on the next line, allowing us to uncache the previous
@@ -149,13 +168,30 @@ object Pregel extends Logging {
       // The call to count() materializes `messages` and the vertices of `g`. This hides oldMessages
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).
+      if (!manageCaching) {
+        messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
+      }
       activeMessages = messages.count()
 
       logInfo("Pregel finished iteration " + i)
 
+      if (!manageCaching) {
+        // Unpersist the RDDs hidden by newly-materialized RDDs
+        oldMessages.unpersist(blocking = false)
+        prevG.unpersistVertices(blocking = false)
+        prevG.edges.unpersist(blocking = false)
+      }
+
       // count the iteration
       i += 1
     })
+
+    if (!manageCaching) {
+      messageCheckpointer.unpersistDataSet()
+      graphCheckpointer.deleteAllCheckpoints()
+      messageCheckpointer.deleteAllCheckpoints()
+    }
+
     g
   } // end of apply
 
