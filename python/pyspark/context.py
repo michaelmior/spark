@@ -424,6 +424,15 @@ class SparkContext(object):
         """
         return RDD(self._jsc.emptyRDD(), self, NoOpSerializer())
 
+    def _startLoop(self):
+        return self._jsc.startLoop()
+
+    def _iterateLoop(self, loopId):
+        self._jsc.iterateLoop(loopId)
+
+    def _endLoop(self, loopId):
+        self._jsc.endLoop(loopId)
+
     def range(self, start, end=None, step=1, numSlices=None):
         """
         Create a new RDD of int containing elements from `start` to `end`
