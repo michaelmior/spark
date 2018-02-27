@@ -181,6 +181,10 @@ abstract class RDD[T: ClassTag](
    * @param allowOverride whether to override any existing level with the new one
    */
   private def persist(newLevel: StorageLevel, allowOverride: Boolean): this.type = {
+    if (conf.getBoolean("spark.rdd.ignorePersist", false)) {
+      return this
+    }
+
     // TODO: Handle changes of StorageLevel
     if (storageLevel != StorageLevel.NONE && newLevel != storageLevel && !allowOverride) {
       throw new UnsupportedOperationException(
@@ -239,6 +243,10 @@ abstract class RDD[T: ClassTag](
    */
 
   def unpersist(blocking: Boolean = true): this.type = {
+    if (conf.getBoolean("spark.rdd.ignorePersist", false)) {
+      return this
+    }
+
     logInfo("Removing RDD " + id + " from persistence list")
     sc.unpersistRDD(id, blocking)
     storageLevel = StorageLevel.NONE
