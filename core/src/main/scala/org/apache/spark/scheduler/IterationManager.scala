@@ -17,7 +17,7 @@
 
 package org.apache.spark.scheduler
 
-import scala.collection.mutable.{ArrayBuffer, HashMap}
+import scala.collection.mutable.{ArrayBuffer, ArrayStack, HashMap}
 
 import org.apache.spark._
 import org.apache.spark.internal.config._
@@ -34,7 +34,7 @@ class IterationManager(
 
   private val manageCaching = sc.conf.get(ITERATION_MANAGE_CACHING)
 
-  private var currentLoop: Option[Int] = None
+  private var currentLoop: ArrayStack[Int] = new ArrayStack[Int]
   private var currentIteration: Int = 0
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
   private val useCount = new HashMap[(Int, Int), Int]
@@ -42,7 +42,7 @@ class IterationManager(
 
   def startLoop(): Int = {
     val loopId = sc.newLoop()
-    currentLoop = Some(loopId)
+    currentLoop.push(loopId)
     loopId
   }
 
@@ -72,32 +72,32 @@ class IterationManager(
   }
 
   def endLoop(loopId: Int): Unit = {
-    assert(currentLoop.get == loopId, "Error when trying to end loop")
-    currentLoop = None
+    assert(currentLoop.pop() == loopId, "Error when trying to end loop")
     currentIteration = -1
   }
 
   def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
-    currentLoop match {
-      case Some(loopId) =>
-        val ancestors = ancestorRdds.getOrElseUpdate(rdd.callSiteTag, new ArrayBuffer[RDD[_]]())
-        ancestors += rdd
+    if (currentLoop.isEmpty) {
+      None
+    } else {
+      val loopId = currentLoop.top
+      val ancestors = ancestorRdds.getOrElseUpdate(rdd.callSiteTag, new ArrayBuffer[RDD[_]]())
+      ancestors += rdd
 
-        val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
-        rdds += rdd
+      val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
+      rdds += rdd
 
-        if (currentIteration > 1) {
-          useCount.get((loopId, rdd.callSiteTag)) match {
-            case Some(count) =>
-              if (count > 1 && manageCaching) {
-                rdd.implicitPersist()
-              }
-            case None => ()
-          }
+      if (currentIteration > 1) {
+        useCount.get((loopId, rdd.callSiteTag)) match {
+          case Some(count) =>
+            if (count > 1 && manageCaching) {
+              rdd.implicitPersist()
+            }
+          case None => ()
         }
+      }
 
-        Some(IterationLoop(loopId, currentIteration))
-      case None => None
+      Some(IterationLoop(loopId, currentIteration))
     }
   }
 
