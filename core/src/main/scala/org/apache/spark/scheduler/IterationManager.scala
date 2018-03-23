@@ -53,8 +53,8 @@ class IterationManager(
           // Record RDDs generated in the second loop iteration since this
           // is the first time we can see loop dependencies
           rdd.dependencies.foreach{ dep =>
-            useCount((loopId, dep.rdd.callSiteTag)) =
-              useCount.getOrElse((loopId, dep.rdd.callSiteTag), 0) + 1
+            val tag = dep.rdd.callSiteTag
+            useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
           }
         }
       }
