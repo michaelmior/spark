@@ -424,6 +424,9 @@ class SparkContext(object):
         """
         return RDD(self._jsc.emptyRDD(), self, NoOpSerializer())
 
+    def _getCurrentLoop(self):
+        return self._jsc.getCurrentLoop()
+
     def _startLoop(self):
         return self._jsc.startLoop()
 

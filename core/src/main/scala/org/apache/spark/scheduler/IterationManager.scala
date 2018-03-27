@@ -33,12 +33,18 @@ class IterationManager(
   extends Logging {
 
   private val manageCaching = sc.conf.get(ITERATION_MANAGE_CACHING)
+  private val outsideCaching = sc.conf.get(ITERATION_OUTSIDE_CACHING)
 
   private var currentLoop: ArrayStack[Int] = new ArrayStack[Int]
   private var currentIteration: Int = 0
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
   private val useCount = new HashMap[(Int, Int), Int]
   private val ancestorRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
+  private val outsideLoop = new HashMap[Int, ArrayBuffer[RDD[_]]]
+
+  def getCurrentLoop(): Option[Int] = {
+    currentLoop.headOption
+  }
 
   def startLoop(): Int = {
     val loopId = sc.newLoop()
@@ -53,8 +59,14 @@ class IterationManager(
           // Record RDDs generated in the second loop iteration since this
           // is the first time we can see loop dependencies
           rdd.dependencies.foreach{ dep =>
-            val tag = dep.rdd.callSiteTag
-            useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
+            if (manageCaching && outsideCaching && dep.rdd.loop.isEmpty) {
+              dep.rdd.implicitPersist()
+              val outsideRdds = outsideLoop.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
+              outsideRdds += dep.rdd
+            } else {
+              val tag = dep.rdd.callSiteTag
+              useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
+            }
           }
         }
       }
@@ -73,6 +85,13 @@ class IterationManager(
 
   def endLoop(loopId: Int): Unit = {
     assert(currentLoop.pop() == loopId, "Error when trying to end loop")
+    if (currentLoop.isEmpty && outsideLoop.contains(loopId)) {
+      outsideLoop(loopId).foreach { rdd =>
+        if (rdd.implicitlyPersisted) {
+          rdd.lazyUnpersist()
+        }
+      }
+    }
     currentIteration = -1
   }
 

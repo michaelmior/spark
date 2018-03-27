@@ -32,6 +32,13 @@ class JavaRDD[T](val rdd: RDD[T])(implicit val classTag: ClassTag[T])
 
   override def wrapRDD(rdd: RDD[T]): JavaRDD[T] = JavaRDD.fromRDD(rdd)
 
+  def loop: Option[Int] = {
+    rdd.loop match {
+      case Some(itLoop) => Some(itLoop.loop)
+      case None => None
+    }
+  }
+
   // Common RDD functions
 
   /**

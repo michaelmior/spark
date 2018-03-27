@@ -141,6 +141,7 @@ class JavaSparkContext(val sc: SparkContext)
   }
 
 
+  def getCurrentLoop(): Option[Int] = { sc.getCurrentLoop() }
   def startLoop(): Int = { sc.startLoop() }
   def iterateLoop(loopId: Int): Unit = { sc.iterateLoop(loopId) }
   def endLoop(loopId: Int): Unit = { sc.endLoop(loopId) }
