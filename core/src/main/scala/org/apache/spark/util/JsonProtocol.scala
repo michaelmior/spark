@@ -434,6 +434,10 @@ private[spark] object JsonProtocol {
     val parentIds = JArray(rddInfo.parentIds.map(JInt(_)).toList)
     ("RDD ID" -> rddInfo.id) ~
     ("Name" -> rddInfo.name) ~
+    ("Loop" -> (rddInfo.loop match {
+      case Some(loop) => JInt(loop.loop)
+      case None => JNothing
+    })) ~
     ("Scope" -> rddInfo.scope.map(_.toJson)) ~
     ("Callsite" -> rddInfo.callSite) ~
     ("Parent IDs" -> parentIds) ~
