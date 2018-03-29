@@ -2426,7 +2426,7 @@ class PipelinedRDD(RDD):
     """
 
     def __init__(self, prev, func, preservesPartitioning=False):
-        same_loop = prev._jrdd.loop() == prev.ctx._getCurrentLoop()
+        same_loop = getattr(prev, '_loop', None) == prev.ctx._getCurrentLoop()
         if not isinstance(prev, PipelinedRDD) or \
                 not prev._is_pipelinable() or not same_loop:
             # This transformation is the first in its stage:
@@ -2447,6 +2447,7 @@ class PipelinedRDD(RDD):
         self.is_cached = False
         self.is_checkpointed = False
         self.ctx = prev.ctx
+        self._loop = self.ctx._getCurrentLoop()
         self.prev = prev
         self._jrdd_val = None
         self._id = None
