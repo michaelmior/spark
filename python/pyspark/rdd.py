@@ -50,7 +50,7 @@ from pyspark.storagelevel import StorageLevel
 from pyspark.resultiterable import ResultIterable
 from pyspark.shuffle import Aggregator, ExternalMerger, \
     get_used_memory, ExternalSorter, ExternalGroupBy
-from pyspark.traceback_utils import SCCallSiteSync
+from pyspark.traceback_utils import SCCallSiteSync, stack_trace
 
 
 __all__ = ["RDD"]
@@ -2472,7 +2472,8 @@ class PipelinedRDD(RDD):
         wrapped_func = _wrap_function(self.ctx, self.func, self._prev_jrdd_deserializer,
                                       self._jrdd_deserializer, profiler)
         python_rdd = self.ctx._jvm.PythonRDD(self._prev_jrdd.rdd(), wrapped_func,
-                                             self.preservesPartitioning)
+                                             self.preservesPartitioning,
+                                             self.ctx._jvm.PythonUtils.toOption(stack_trace()))
         self._jrdd_val = python_rdd.asJavaRDD()
 
         if profiler:

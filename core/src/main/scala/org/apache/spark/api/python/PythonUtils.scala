@@ -74,4 +74,8 @@ private[spark] object PythonUtils {
   def toScalaMap[K, V](jm: java.util.Map[K, V]): Map[K, V] = {
     jm.asScala.toMap
   }
+
+  def toOption[T](v: T): Option[T] = {
+    Some(v)
+  }
 }

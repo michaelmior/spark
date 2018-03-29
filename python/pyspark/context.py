@@ -38,7 +38,7 @@ from pyspark.serializers import PickleSerializer, BatchedSerializer, UTF8Deseria
     PairDeserializer, AutoBatchedSerializer, NoOpSerializer
 from pyspark.storagelevel import StorageLevel
 from pyspark.rdd import RDD, _load_from_socket, ignore_unicode_prefix
-from pyspark.traceback_utils import CallSite, first_spark_call
+from pyspark.traceback_utils import CallSite, first_spark_call, stack_trace
 from pyspark.status import StatusTracker
 from pyspark.profiler import ProfilerCollector, BasicProfiler
 
@@ -507,7 +507,8 @@ class SparkContext(object):
             serializer.dump_stream(data, tempFile)
             tempFile.close()
             readRDDFromFile = self._jvm.PythonRDD.readRDDFromFile
-            return readRDDFromFile(self._jsc, tempFile.name, parallelism)
+            return readRDDFromFile(self._jsc, tempFile.name, parallelism,
+                                   self._jvm.PythonUtils.toOption(stack_trace()))
         finally:
             # readRDDFromFile eagerily reads the file so we can delete right after.
             os.unlink(tempFile.name)
@@ -657,7 +658,8 @@ class SparkContext(object):
         """
         minSplits = minSplits or min(self.defaultParallelism, 2)
         jrdd = self._jvm.PythonRDD.sequenceFile(self._jsc, path, keyClass, valueClass,
-                                                keyConverter, valueConverter, minSplits, batchSize)
+                                                keyConverter, valueConverter, minSplits, batchSize,
+                                                self._jvm.PythonUtils.toOption(stack_trace()))
         return RDD(jrdd, self)
 
     def newAPIHadoopFile(self, path, inputFormatClass, keyClass, valueClass, keyConverter=None,
@@ -687,7 +689,8 @@ class SparkContext(object):
         jconf = self._dictToJavaMap(conf)
         jrdd = self._jvm.PythonRDD.newAPIHadoopFile(self._jsc, path, inputFormatClass, keyClass,
                                                     valueClass, keyConverter, valueConverter,
-                                                    jconf, batchSize)
+                                                    jconf, batchSize,
+                                                    self._jvm.PythonUtils.toOption(stack_trace()))
         return RDD(jrdd, self)
 
     def newAPIHadoopRDD(self, inputFormatClass, keyClass, valueClass, keyConverter=None,
@@ -714,7 +717,8 @@ class SparkContext(object):
         jconf = self._dictToJavaMap(conf)
         jrdd = self._jvm.PythonRDD.newAPIHadoopRDD(self._jsc, inputFormatClass, keyClass,
                                                    valueClass, keyConverter, valueConverter,
-                                                   jconf, batchSize)
+                                                   jconf, batchSize,
+                                                   self._jvm.PythonUtils.toOption(stack_trace()))
         return RDD(jrdd, self)
 
     def hadoopFile(self, path, inputFormatClass, keyClass, valueClass, keyConverter=None,
@@ -744,7 +748,8 @@ class SparkContext(object):
         jconf = self._dictToJavaMap(conf)
         jrdd = self._jvm.PythonRDD.hadoopFile(self._jsc, path, inputFormatClass, keyClass,
                                               valueClass, keyConverter, valueConverter,
-                                              jconf, batchSize)
+                                              jconf, batchSize,
+                                              self._jvm.PythonUtils.toOption(stack_trace()))
         return RDD(jrdd, self)
 
     def hadoopRDD(self, inputFormatClass, keyClass, valueClass, keyConverter=None,
@@ -771,7 +776,8 @@ class SparkContext(object):
         jconf = self._dictToJavaMap(conf)
         jrdd = self._jvm.PythonRDD.hadoopRDD(self._jsc, inputFormatClass, keyClass,
                                              valueClass, keyConverter, valueConverter,
-                                             jconf, batchSize)
+                                             jconf, batchSize,
+                                             self._jvm.PythonUtils.toOption(stack_trace()))
         return RDD(jrdd, self)
 
     def _checkpointFile(self, name, input_deserializer):

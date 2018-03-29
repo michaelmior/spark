@@ -46,6 +46,9 @@ def first_spark_call():
     return CallSite(function=sfun, file=ufile, linenum=uline)
 
 
+def stack_trace():
+    return '\n'.join(traceback.format_stack()[:-1]).strip()
+
 class SCCallSiteSync(object):
     """
     Helper for setting the spark context call site.

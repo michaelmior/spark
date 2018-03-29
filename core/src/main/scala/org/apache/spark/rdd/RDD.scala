@@ -42,7 +42,7 @@ import org.apache.spark.partial.GroupedCountEvaluator
 import org.apache.spark.partial.PartialResult
 import org.apache.spark.scheduler.IterationLoop
 import org.apache.spark.storage.{RDDBlockId, StorageLevel}
-import org.apache.spark.util.{BoundedPriorityQueue, Utils}
+import org.apache.spark.util.{BoundedPriorityQueue, CallSite, Utils}
 import org.apache.spark.util.collection.{OpenHashMap, Utils => collectionUtils}
 import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, PoissonSampler,
   SamplingUtils}
@@ -76,7 +76,7 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
  * for more details on RDD internals.
  */
 abstract class RDD[T: ClassTag](
-    @transient private var _sc: SparkContext,
+    @transient private[spark] var _sc: SparkContext,
     @transient private var deps: Seq[Dependency[_]]
   ) extends Serializable with Logging {
 
@@ -148,7 +148,19 @@ abstract class RDD[T: ClassTag](
   def sparkContext: SparkContext = sc
 
   /** User code that created this RDD (e.g. `textFile`, `parallelize`). */
-  @transient private[spark] val creationSite = sc.getCallSite()
+  @transient private val _creationSite = sc.getCallSite()
+
+  @transient private[spark] var extraStack: Option[String] = None
+
+  private[spark] def creationSite: CallSite = {
+    extraStack match {
+      case None => _creationSite
+      case Some(stack) => {
+        val lastLine = stack.split("\n")(1)
+        CallSite(lastLine, stack + "\n" + _creationSite.longForm)
+      }
+    }
+  }
 
   private[spark] val callSiteTag = creationSite.longForm.hashCode
 
