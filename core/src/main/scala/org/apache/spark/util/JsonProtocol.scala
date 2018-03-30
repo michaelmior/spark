@@ -435,7 +435,7 @@ private[spark] object JsonProtocol {
     ("RDD ID" -> rddInfo.id) ~
     ("Name" -> rddInfo.name) ~
     ("Loop" -> (rddInfo.loop match {
-      case Some(loop) => JInt(loop.loop)
+      case Some(loop) => ("Loop" -> loop.loop) ~ ("Counter" -> loop.counter)
       case None => JNothing
     })) ~
     ("Scope" -> rddInfo.scope.map(_.toJson)) ~
