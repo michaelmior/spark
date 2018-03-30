@@ -17,7 +17,7 @@
 
 package org.apache.spark.scheduler
 
-import scala.collection.mutable.{ArrayBuffer, ArrayStack, HashMap}
+import scala.collection.mutable.{ArrayBuffer, ArrayStack, HashMap, HashSet}
 
 import org.apache.spark._
 import org.apache.spark.internal.config._
@@ -36,55 +36,88 @@ class IterationManager(
   private val outsideCaching = sc.conf.get(ITERATION_OUTSIDE_CACHING)
 
   private var currentLoop: ArrayStack[Int] = new ArrayStack[Int]
-  private var currentIteration: Int = 0
+  private var currentIteration: ArrayStack[Int] = new ArrayStack[Int]
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
   private val useCount = new HashMap[(Int, Int), Int]
   private val ancestorRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
-  private val outsideLoop = new HashMap[Int, ArrayBuffer[RDD[_]]]
+  private val outsideLoop = new HashMap[Int, HashSet[RDD[_]]]
 
   def getCurrentLoop(): Option[Int] = {
     currentLoop.headOption
   }
 
+  def getCurrentIteration(): Option[Int] = {
+    currentIteration.headOption
+  }
+
   def startLoop(): Int = {
     val loopId = sc.newLoop()
     currentLoop.push(loopId)
+    currentIteration.push(0)
     loopId
   }
 
+  private def persistOutsider(rdd: RDD[_], loopId: Int): Unit = {
+    if (manageCaching && outsideCaching && rdd.loop.isEmpty) {
+      rdd.implicitPersist()
+      val outsideRdds = outsideLoop.getOrElseUpdate(loopId, new HashSet[RDD[_]]())
+      outsideRdds += rdd
+    }
+  }
+
   def iterateLoop(loopId: Int): Unit = {
-    if (currentIteration == 1) {
-      loopRdds(loopId).foreach { rdd =>
-        if (rdd.loop.get.counter == 1) {
+    assert(currentLoop.top == loopId, "Error iterating loop")
+    if (currentIteration.top == 1) {
+      loopRdds(loopId).filter { rdd =>
+        // Check that this RDD has not been moved outside the loop
+        if (rdd.loop.isEmpty) {
+          false
+        } else if (rdd.loop.get.counter == 1) {
           // Record RDDs generated in the second loop iteration since this
           // is the first time we can see loop dependencies
           rdd.dependencies.foreach{ dep =>
             if (manageCaching && outsideCaching && dep.rdd.loop.isEmpty) {
-              dep.rdd.implicitPersist()
-              val outsideRdds = outsideLoop.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
-              outsideRdds += dep.rdd
+              persistOutsider(dep.rdd, loopId)
             } else {
               val tag = dep.rdd.callSiteTag
               useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
             }
           }
         }
+
+        true
       }
     }
 
     loopRdds(loopId).foreach { rdd =>
-      if (rdd.loop.get.counter < currentIteration &&
+      if (rdd.loop.isEmpty) {
+        // In pyspark an RDD which initially appears to be inside the loop
+        // may be correctly identified later as outside the loop
+        persistOutsider(rdd, loopId)
+        useCount.remove((loopId, rdd.callSiteTag))
+      } else if (rdd.loop.get.counter < currentIteration.top &&
           rdd.getStorageLevel != StorageLevel.NONE &&
           rdd.implicitlyPersisted && manageCaching) {
         rdd.lazyUnpersist()
       }
     }
 
-    currentIteration += 1
+    currentIteration.push(currentIteration.pop() + 1)
   }
 
   def endLoop(loopId: Int): Unit = {
     assert(currentLoop.pop() == loopId, "Error when trying to end loop")
+    currentIteration.pop()
+
+    // Unpersist any remaining RDDs
+    loopRdds(loopId).foreach { rdd =>
+      if (rdd.getStorageLevel != StorageLevel.NONE &&
+          rdd.implicitlyPersisted && manageCaching) {
+        rdd.lazyUnpersist()
+      }
+    }
+    loopRdds.remove(loopId)
+
     if (currentLoop.isEmpty && outsideLoop.contains(loopId)) {
       outsideLoop(loopId).foreach { rdd =>
         if (rdd.implicitlyPersisted) {
@@ -92,7 +125,6 @@ class IterationManager(
         }
       }
     }
-    currentIteration = -1
   }
 
   def registerRdd(rdd: RDD[_]): Option[IterationLoop] = {
@@ -106,7 +138,7 @@ class IterationManager(
       val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
       rdds += rdd
 
-      if (currentIteration > 1) {
+      if (currentIteration.top > 1) {
         useCount.get((loopId, rdd.callSiteTag)) match {
           case Some(count) =>
             if (count > 1 && manageCaching) {
@@ -116,7 +148,7 @@ class IterationManager(
         }
       }
 
-      Some(IterationLoop(loopId, currentIteration))
+      Some(IterationLoop(loopId, currentIteration.top))
     }
   }
 

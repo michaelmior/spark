@@ -1338,6 +1338,10 @@ class SparkContext(config: SparkConf) extends Logging {
     iterationManager.getCurrentLoop()
   }
 
+  private[spark] def getCurrentIteration(): Option[Int] = {
+    iterationManager.getCurrentIteration()
+  }
+
   private[spark] def startLoop(): Int = {
     iterationManager.startLoop()
   }

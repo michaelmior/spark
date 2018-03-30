@@ -427,6 +427,9 @@ class SparkContext(object):
     def _getCurrentLoop(self):
         return self._jsc.getCurrentLoop()
 
+    def _getCurrentIteration(self):
+        return self._jsc.getCurrentIteration()
+
     def _startLoop(self):
         return self._jsc.startLoop()
 
