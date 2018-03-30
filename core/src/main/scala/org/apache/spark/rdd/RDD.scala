@@ -165,7 +165,7 @@ abstract class RDD[T: ClassTag](
   private[spark] val callSiteTag = creationSite.longForm.hashCode
 
   /** A unique ID for this RDD (within its SparkContext). */
-  val (id: Int, loop: Option[IterationLoop]) = sc.registerRdd(this)
+  var (id: Int, loop: Option[IterationLoop]) = sc.registerRdd(this)
 
   /** A friendly name for this RDD */
   @transient var name: String = _
@@ -173,6 +173,16 @@ abstract class RDD[T: ClassTag](
   /** Assign a name to this RDD */
   def setName(_name: String): this.type = {
     name = _name
+    this
+  }
+
+  def setLoop(loopId: Int, counter: Int): this.type = {
+    loop = Some(IterationLoop(loopId, counter))
+    this
+  }
+
+  def clearLoop(): this.type = {
+    loop = None
     this
   }
 

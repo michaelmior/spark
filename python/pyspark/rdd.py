@@ -2434,6 +2434,12 @@ class PipelinedRDD(RDD):
             self.func = func
             self.preservesPartitioning = preservesPartitioning
             self._prev_jrdd = prev._jrdd
+
+            if hasattr(prev, '_loop') and not prev._loop[0].isEmpty():
+                prev._jrdd.setLoop(prev._loop[0].get(), prev._loop[1].get())
+            else:
+                prev._jrdd.clearLoop()
+
             self._prev_jrdd_deserializer = prev._jrdd_deserializer
         else:
             prev_func = prev.func

@@ -40,6 +40,14 @@ class JavaRDD[T](val rdd: RDD[T], val stackTrace: Option[String] = None)(implici
     }
   }
 
+  def setLoop(loop: Int, counter: Int): Unit = {
+    rdd.setLoop(loop, counter)
+  }
+
+  def clearLoop(): Unit = {
+    rdd.clearLoop()
+  }
+
   // Common RDD functions
 
   /**
