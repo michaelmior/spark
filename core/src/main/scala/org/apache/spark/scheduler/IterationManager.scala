@@ -58,7 +58,7 @@ class IterationManager(
   }
 
   private def persistOutsider(rdd: RDD[_], loopId: Int): Unit = {
-    if (manageCaching && outsideCaching && rdd.loop.isEmpty) {
+    if (manageCaching && outsideCaching && rdd.loop.isEmpty && !rdd.implicitlyPersisted) {
       rdd.implicitPersist()
       val outsideRdds = outsideLoop.getOrElseUpdate(loopId, new HashSet[RDD[_]]())
       outsideRdds += rdd
@@ -76,8 +76,10 @@ class IterationManager(
           // Record RDDs generated in the second loop iteration since this
           // is the first time we can see loop dependencies
           rdd.dependencies.foreach{ dep =>
-            if (manageCaching && outsideCaching && dep.rdd.loop.isEmpty) {
-              persistOutsider(dep.rdd, loopId)
+            if (dep.rdd.loop.isEmpty) {
+              if (manageCaching && outsideCaching) {
+                persistOutsider(dep.rdd, loopId)
+              }
             } else {
               val tag = dep.rdd.callSiteTag
               useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
