@@ -23,8 +23,8 @@ import breeze.linalg.{Vector => BV}
 
 import org.apache.spark.Macros
 import org.apache.spark.graphx._
-import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config._
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 
 /**

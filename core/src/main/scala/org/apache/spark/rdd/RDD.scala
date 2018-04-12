@@ -155,10 +155,9 @@ abstract class RDD[T: ClassTag](
   private[spark] def creationSite: CallSite = {
     extraStack match {
       case None => _creationSite
-      case Some(stack) => {
+      case Some(stack) =>
         val lastLine = stack.split("\n")(1)
         CallSite(lastLine, stack + "\n" + _creationSite.longForm)
-      }
     }
   }
 
