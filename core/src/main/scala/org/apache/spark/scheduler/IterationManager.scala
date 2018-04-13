@@ -142,7 +142,7 @@ class IterationManager(
       if (currentIteration.top > 1) {
         useCount.get((loopId, rdd.callSiteTag)) match {
           case Some(count) =>
-            if (count > 1 && manageCaching) {
+            if (count > 1 && manageCaching && !rdd.implicitlyPersisted) {
               rdd.implicitPersist()
             }
           case None => ()
