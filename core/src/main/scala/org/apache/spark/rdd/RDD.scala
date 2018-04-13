@@ -162,6 +162,10 @@ abstract class RDD[T: ClassTag](
   }
 
   private[spark] val callSiteTag = creationSite.longForm.hashCode
+  private var storageLevel: StorageLevel = StorageLevel.NONE
+  private[spark] var implicitlyPersisted: Boolean = false
+
+  private var pendingUnpersist: Boolean = false
 
   /** A unique ID for this RDD (within its SparkContext). */
   var (id: Int, loop: Option[IterationLoop]) = sc.registerRdd(this)
@@ -1706,11 +1710,6 @@ abstract class RDD[T: ClassTag](
   // =======================================================================
   // Other internal methods and fields
   // =======================================================================
-
-  private var storageLevel: StorageLevel = StorageLevel.NONE
-  private[spark] var implicitlyPersisted: Boolean = false
-
-  private var pendingUnpersist: Boolean = false
 
   /**
    * The scope associated with the operation that created this RDD.
