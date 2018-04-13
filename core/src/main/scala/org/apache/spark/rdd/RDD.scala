@@ -251,8 +251,10 @@ abstract class RDD[T: ClassTag](
   def unpersistPending(): Boolean = pendingUnpersist
 
   def lazyUnpersist(): this.type = {
-    logInfo("Scheduling RDD " + id + " for lazy unpersist")
-    pendingUnpersist = true
+    if (storageLevel != StorageLevel.NONE) {
+      logInfo("Scheduling RDD " + id + " for lazy unpersist")
+      pendingUnpersist = true
+    }
     this
   }
 

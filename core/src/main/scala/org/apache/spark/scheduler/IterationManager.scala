@@ -98,7 +98,6 @@ class IterationManager(
         persistOutsider(rdd, loopId)
         useCount.remove((loopId, rdd.callSiteTag))
       } else if (rdd.loop.get.counter < currentIteration.top &&
-          rdd.getStorageLevel != StorageLevel.NONE &&
           rdd.implicitlyPersisted && manageCaching) {
         rdd.lazyUnpersist()
       }
