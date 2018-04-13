@@ -153,6 +153,14 @@ class IterationManager(
     }
   }
 
+  def markLoopRddUsed(rdd: RDD[_]) {
+    if (rdd.loop.isDefined && rdd.loop.get.counter == 1) {
+      val tag = rdd.callSiteTag
+      val loopId = rdd.loop.get.loop
+      useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
+    }
+  }
+
   def unregisterAncestors(rdd: RDD[_], keepPrevious: Int = 0): Seq[RDD[_]] = {
     ancestorRdds.get(rdd.callSiteTag) match {
       case Some(rdds) =>
