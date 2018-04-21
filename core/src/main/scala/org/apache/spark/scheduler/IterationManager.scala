@@ -111,13 +111,15 @@ class IterationManager(
     currentIteration.pop()
 
     // Unpersist any remaining RDDs
-    loopRdds(loopId).foreach { rdd =>
-      if (rdd.getStorageLevel != StorageLevel.NONE &&
-          rdd.implicitlyPersisted && manageCaching) {
-        rdd.lazyUnpersist()
+    if (loopRdds.contains(loopId)) {
+      loopRdds(loopId).foreach { rdd =>
+        if (rdd.getStorageLevel != StorageLevel.NONE &&
+            rdd.implicitlyPersisted && manageCaching) {
+          rdd.lazyUnpersist()
+        }
       }
+      loopRdds.remove(loopId)
     }
-    loopRdds.remove(loopId)
 
     if (currentLoop.isEmpty && outsideLoop.contains(loopId)) {
       outsideLoop(loopId).foreach { rdd =>
