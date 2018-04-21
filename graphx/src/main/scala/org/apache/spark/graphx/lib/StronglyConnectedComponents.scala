@@ -41,7 +41,8 @@ object StronglyConnectedComponents {
     require(numIter > 0, s"Number of iterations must be greater than 0," +
       s" but got ${numIter}")
 
-    val manageCaching = graph.vertices.sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
+    val sparkContext = graph.vertices.sparkContext
+    val manageCaching = sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
 
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
@@ -53,9 +54,12 @@ object StronglyConnectedComponents {
 
     var numVertices = sccWorkGraph.numVertices
     var iter = 0
-    Macros.whileLoop(graph.vertices.sparkContext, sccWorkGraph.numVertices > 0 && iter < numIter, {
+    Macros.whileLoop(sparkContext, sccWorkGraph.numVertices > 0 && iter < numIter, {
       iter += 1
-      do {
+
+      var first = true
+      Macros.whileLoop(sparkContext, first || sccWorkGraph.numVertices < numVertices, {
+        first = false
         numVertices = sccWorkGraph.numVertices
         sccWorkGraph = sccWorkGraph.outerJoinVertices(sccWorkGraph.outDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
@@ -91,7 +95,7 @@ object StronglyConnectedComponents {
         if (!manageCaching) {
           sccWorkGraph.cache()
         }
-      } while (sccWorkGraph.numVertices < numVertices)
+      })
 
       // if iter < numIter at this point sccGraph that is returned
       // will not be recomputed and pregel executions are pointless
