@@ -52,8 +52,7 @@ class IterationManager(
     currentIteration.headOption
   }
 
-  def startLoop(): Int = {
-    val loopId = sc.newLoop()
+  def startLoop(loopId: Int): Int = {
     currentLoop.push(loopId)
     currentIteration.push(0)
     loopId

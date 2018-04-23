@@ -214,11 +214,6 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _shutdownHookRef: AnyRef = _
   private var _statusStore: AppStatusStore = _
 
-  private val nextLoop = new AtomicInteger(0)
-
-  /** Register a new loop, returning its ID */
-  private[spark] def newLoop(): Int = nextLoop.getAndIncrement()
-
   /* ------------------------------------------------------------------------------------- *
    | Accessors and public fields. These provide access to the internal state of the        |
    | context.                                                                              |
@@ -1343,7 +1338,9 @@ class SparkContext(config: SparkConf) extends Logging {
   }
 
   private[spark] def startLoop(): Int = {
-    iterationManager.startLoop()
+    val loopId = Utils.getCallSite().longForm.hashCode
+    iterationManager.startLoop(loopId)
+    loopId
   }
 
   private[spark] def iterateLoop(loopId: Int): Unit = {
