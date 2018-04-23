@@ -166,6 +166,7 @@ abstract class RDD[T: ClassTag](
   private[spark] var implicitlyPersisted: Boolean = false
 
   private var pendingUnpersist: Boolean = false
+  private[spark] var reuseCount: Option[Int] = None
 
   /** A unique ID for this RDD (within its SparkContext). */
   var (id: Int, loop: Option[IterationLoop]) = sc.registerRdd(this)
@@ -254,10 +255,11 @@ abstract class RDD[T: ClassTag](
 
   def unpersistPending(): Boolean = pendingUnpersist
 
-  def lazyUnpersist(): this.type = {
+  def lazyUnpersist(uses: Option[Int] = None): this.type = {
     if (storageLevel != StorageLevel.NONE) {
       logInfo("Scheduling RDD " + id + " for lazy unpersist")
       pendingUnpersist = true
+      reuseCount = uses
     }
     this
   }

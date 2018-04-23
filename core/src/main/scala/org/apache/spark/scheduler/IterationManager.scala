@@ -94,14 +94,21 @@ class IterationManager(
       loopsCounted += loopId
     }
 
-    loopRdds(loopId).foreach { rdd =>
+    loopRdds(loopId).filter { rdd =>
       if (rdd.loop.isEmpty) {
         // In pyspark an RDD which initially appears to be inside the loop
         // may be correctly identified later as outside the loop
         persistOutsider(rdd, loopId)
+
+        false
       } else if (rdd.loop.get.counter < currentIteration.top &&
           rdd.implicitlyPersisted && manageCaching && unpersist) {
-        rdd.lazyUnpersist()
+        rdd.lazyUnpersist(useCount.get(rdd.callSiteTag))
+
+        false
+      } else {
+        // RDD should not be unpersisted yet
+        true
       }
     }
 
@@ -117,7 +124,7 @@ class IterationManager(
       loopRdds(loopId).foreach { rdd =>
         if (rdd.getStorageLevel != StorageLevel.NONE &&
             rdd.implicitlyPersisted && manageCaching && unpersist) {
-          rdd.lazyUnpersist()
+          rdd.lazyUnpersist(useCount.get(rdd.callSiteTag))
         }
       }
       loopRdds.remove(loopId)

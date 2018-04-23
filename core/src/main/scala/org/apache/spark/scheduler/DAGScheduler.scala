@@ -384,8 +384,16 @@ class DAGScheduler(
       waitingUnpersistStages.removeBinding(rdd, stage.id).get(rdd) match {
         case Some(_) => ()
         case None =>
-          logInfo(s"Finally unpersisting RDD ${rdd.id} while executing stage ${stage.id}")
-          rdd.unpersist(blocking = false)
+          val unpersist = rdd.reuseCount match {
+            case Some(count) =>
+              rdd.reuseCount = Some(count - 1)
+              count <= 1
+            case None => true
+          }
+          if (unpersist) {
+            logInfo(s"Finally unpersisting RDD ${rdd.id} while executing stage ${stage.id}")
+            rdd.unpersist(blocking = false)
+          }
       }
     }
   }
