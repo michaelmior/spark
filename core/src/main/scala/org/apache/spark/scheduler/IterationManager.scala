@@ -39,9 +39,10 @@ class IterationManager(
   private var currentLoop: ArrayStack[Int] = new ArrayStack[Int]
   private var currentIteration: ArrayStack[Int] = new ArrayStack[Int]
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
-  private val useCount = new HashMap[(Int, Int), Int]
+  private val useCount = new HashMap[Int, Int]
   private val ancestorRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
   private val outsideLoop = new HashMap[Int, HashSet[RDD[_]]]
+  private val loopsCounted = new HashSet[Int]
 
   def getCurrentLoop(): Option[Int] = {
     currentLoop.headOption
@@ -68,7 +69,7 @@ class IterationManager(
 
   def iterateLoop(loopId: Int): Unit = {
     assert(currentLoop.top == loopId, "Error iterating loop")
-    if (currentIteration.top == 1) {
+    if (currentIteration.top == 1 && !loopsCounted.contains(currentLoop.top)) {
       loopRdds(loopId).filter { rdd =>
         // Check that this RDD has not been moved outside the loop
         if (rdd.loop.isEmpty) {
@@ -83,13 +84,15 @@ class IterationManager(
               }
             } else {
               val tag = dep.rdd.callSiteTag
-              useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
+              useCount(tag) = useCount.getOrElse(tag, 0) + 1
             }
           }
         }
 
         true
       }
+
+      loopsCounted += loopId
     }
 
     loopRdds(loopId).foreach { rdd =>
@@ -97,7 +100,6 @@ class IterationManager(
         // In pyspark an RDD which initially appears to be inside the loop
         // may be correctly identified later as outside the loop
         persistOutsider(rdd, loopId)
-        useCount.remove((loopId, rdd.callSiteTag))
       } else if (rdd.loop.get.counter < currentIteration.top &&
           rdd.implicitlyPersisted && manageCaching && unpersist) {
         rdd.lazyUnpersist()
@@ -143,7 +145,7 @@ class IterationManager(
       rdds += rdd
 
       if (currentIteration.top > 1) {
-        useCount.get((loopId, rdd.callSiteTag)) match {
+        useCount.get(rdd.callSiteTag) match {
           case Some(count) =>
             if (count > 1 && manageCaching && !rdd.implicitlyPersisted) {
               rdd.implicitPersist()
@@ -157,10 +159,12 @@ class IterationManager(
   }
 
   def markLoopRddUsed(rdd: RDD[_]) {
-    if (rdd.loop.isDefined && rdd.loop.get.counter == 1) {
+    val isLoopRdd = rdd.loop.isDefined && rdd.loop.get.counter == 1
+    val loopCounted = currentLoop.isEmpty || loopsCounted.contains(currentLoop.top)
+    if (isLoopRdd && !loopCounted) {
       val tag = rdd.callSiteTag
       val loopId = rdd.loop.get.loop
-      useCount((loopId, tag)) = useCount.getOrElse((loopId, tag), 0) + 1
+      useCount(tag) = useCount.getOrElse(tag, 0) + 1
     }
   }
 
