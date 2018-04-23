@@ -34,6 +34,7 @@ class IterationManager(
 
   private val manageCaching = sc.conf.get(ITERATION_MANAGE_CACHING)
   private val outsideCaching = sc.conf.get(ITERATION_OUTSIDE_CACHING)
+  private val unpersist = sc.conf.get(ITERATION_UNPERSIST)
 
   private var currentLoop: ArrayStack[Int] = new ArrayStack[Int]
   private var currentIteration: ArrayStack[Int] = new ArrayStack[Int]
@@ -98,7 +99,7 @@ class IterationManager(
         persistOutsider(rdd, loopId)
         useCount.remove((loopId, rdd.callSiteTag))
       } else if (rdd.loop.get.counter < currentIteration.top &&
-          rdd.implicitlyPersisted && manageCaching) {
+          rdd.implicitlyPersisted && manageCaching && unpersist) {
         rdd.lazyUnpersist()
       }
     }
@@ -114,7 +115,7 @@ class IterationManager(
     if (loopRdds.contains(loopId)) {
       loopRdds(loopId).foreach { rdd =>
         if (rdd.getStorageLevel != StorageLevel.NONE &&
-            rdd.implicitlyPersisted && manageCaching) {
+            rdd.implicitlyPersisted && manageCaching && unpersist) {
           rdd.lazyUnpersist()
         }
       }
@@ -123,7 +124,7 @@ class IterationManager(
 
     if (currentLoop.isEmpty && outsideLoop.contains(loopId)) {
       outsideLoop(loopId).foreach { rdd =>
-        if (rdd.implicitlyPersisted) {
+        if (rdd.implicitlyPersisted && unpersist) {
           rdd.lazyUnpersist()
         }
       }
