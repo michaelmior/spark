@@ -47,7 +47,10 @@ object StronglyConnectedComponents {
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
     // graph we are going to work with in our iterations
-    var sccWorkGraph = graph.mapVertices { case (vid, _) => (vid, false) }.cache()
+    var sccWorkGraph = graph.mapVertices { case (vid, _) => (vid, false) }
+    if (!manageCaching) {
+      sccWorkGraph.cache()
+    }
 
     // helper variables to unpersist cached graphs
     var prevSccGraph = sccGraph
