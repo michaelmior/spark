@@ -58,8 +58,8 @@ class VertexRDDImpl[VD] private[graphx] (
     this
   }
 
-  override def lazyUnpersist(): this.type = {
-    partitionsRDD.lazyUnpersist()
+  override def lazyUnpersist(uses: Option[Int] = None): this.type = {
+    partitionsRDD.lazyUnpersist(uses)
     this
   }
 
