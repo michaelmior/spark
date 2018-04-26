@@ -2178,6 +2178,7 @@ class SparkContext(config: SparkConf) extends Logging {
     logInfo("Starting job: " + callSite.shortForm)
     val start = System.nanoTime
     val cleanedFunc = clean(func)
+    iterationManager.markLoopRddUsed(rdd)
     val result = dagScheduler.runApproximateJob(rdd, cleanedFunc, evaluator, callSite, timeout,
       localProperties.get)
     logInfo(
@@ -2205,6 +2206,7 @@ class SparkContext(config: SparkConf) extends Logging {
     assertNotStopped()
     val cleanF = clean(processPartition)
     val callSite = getCallSite
+    iterationManager.markLoopRddUsed(rdd)
     val waiter = dagScheduler.submitJob(
       rdd,
       (context: TaskContext, iter: Iterator[T]) => cleanF(iter),
