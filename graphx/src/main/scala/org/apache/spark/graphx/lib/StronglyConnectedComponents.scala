@@ -43,6 +43,7 @@ object StronglyConnectedComponents {
 
     val sparkContext = graph.vertices.sparkContext
     val manageCaching = sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
+    val materialize = sparkContext.getConf.get(ITERATION_MATERIALIZE)
 
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
@@ -85,9 +86,13 @@ object StronglyConnectedComponents {
 
         if (!manageCaching) {
           sccGraph.cache()
+        }
+        if (materialize) {
           // materialize vertices and edges
           sccGraph.vertices.count()
           sccGraph.edges.count()
+        }
+        if (!manageCaching) {
           // sccGraph materialized so, unpersist can be done on previous
           prevSccGraph.unpersist(blocking = false)
           prevSccGraph = sccGraph

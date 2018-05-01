@@ -102,6 +102,10 @@ package object config {
     .booleanConf
     .createWithDefault(true)
 
+  private[spark] val ITERATION_MATERIALIZE = ConfigBuilder("spark.iteration.materialize")
+    .booleanConf
+    .createWithDefault(false)
+
   private[spark] val ITERATION_OUTSIDE_CACHING = ConfigBuilder("spark.iteration.outsideCaching")
     .booleanConf
     .createWithDefault(true)

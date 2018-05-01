@@ -117,6 +117,7 @@ object PageRank extends Logging {
     val src: VertexId = srcId.getOrElse(-1L)
     val sc = graph.vertices.sparkContext
     val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
+    val materialize = sc.getConf.get(ITERATION_MATERIALIZE)
 
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each vertex with attribute 1.0.
@@ -162,11 +163,15 @@ object PageRank extends Logging {
 
       if (!manageCaching) {
         rankGraph.cache()
+      }
+      if (materialize) {
+        rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
+      }
+      logInfo(s"PageRank finished iteration $iteration.")
+      if (!manageCaching) {
         prevRankGraph.vertices.lazyUnpersist()
         prevRankGraph.edges.lazyUnpersist()
       }
-
-      logInfo(s"PageRank finished iteration $iteration.")
 
       iteration += 1
     })
@@ -214,6 +219,7 @@ object PageRank extends Logging {
     }.toMap
     val sc = graph.vertices.sparkContext
     val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
+    val materialize = sc.getConf.get(ITERATION_MATERIALIZE)
     val sourcesInitMapBC = sc.broadcast(sourcesInitMap)
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each source vertex with attribute 1.0.
@@ -251,6 +257,11 @@ object PageRank extends Logging {
         }
       if (!manageCaching) {
         rankGraph.cache()
+      }
+      if (materialize) {
+        rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
+      }
+      if (!manageCaching) {
         prevRankGraph.vertices.lazyUnpersist()
         prevRankGraph.edges.lazyUnpersist()
       }
