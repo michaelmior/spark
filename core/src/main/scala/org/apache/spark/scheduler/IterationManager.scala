@@ -40,7 +40,6 @@ class IterationManager(
   private var currentIteration: ArrayStack[Int] = new ArrayStack[Int]
   private val loopRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
   private val useCount = new HashMap[Int, Int]
-  private val ancestorRdds = new HashMap[Int, ArrayBuffer[RDD[_]]]
   private val outsideLoop = new HashMap[Int, HashSet[RDD[_]]]
   private val loopsCounted = new HashSet[Int]
 
@@ -144,8 +143,6 @@ class IterationManager(
       None
     } else {
       val loopId = currentLoop.top
-      val ancestors = ancestorRdds.getOrElseUpdate(rdd.callSiteTag, new ArrayBuffer[RDD[_]]())
-      ancestors += rdd
 
       val rdds = loopRdds.getOrElseUpdate(loopId, new ArrayBuffer[RDD[_]]())
       rdds += rdd
@@ -171,22 +168,6 @@ class IterationManager(
       val tag = rdd.callSiteTag
       val loopId = rdd.loop.get.loop
       useCount(tag) = useCount.getOrElse(tag, 0) + 1
-    }
-  }
-
-  def unregisterAncestors(rdd: RDD[_], keepPrevious: Int = 0): Seq[RDD[_]] = {
-    ancestorRdds.get(rdd.callSiteTag) match {
-      case Some(rdds) =>
-        val ancestors = new ArrayBuffer[RDD[_]]
-
-        rdds.foreach { ancestor =>
-          if (ancestor.loop.get.counter < rdd.loop.get.counter - keepPrevious) {
-            ancestors += ancestor
-          }
-        }
-
-        ancestors
-      case None => Seq.empty[RDD[_]]
     }
   }
 }
