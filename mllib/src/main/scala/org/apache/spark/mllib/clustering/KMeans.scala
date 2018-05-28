@@ -376,6 +376,9 @@ class KMeans private (
    */
   private[clustering] def initKMeansParallel(data: RDD[VectorWithNorm],
       distanceMeasureInstance: DistanceMeasure): Array[VectorWithNorm] = {
+    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
+    sc.listenerBus.post(SparkListenerTrace(s"KMeans_init start"))
+
     // Initialize empty centers and point costs.
     var costs = data.map(_ => Double.PositiveInfinity)
 
@@ -400,11 +403,16 @@ class KMeans private (
       val preCosts = costs
       costs = data.zip(preCosts).map { case (point, cost) =>
         math.min(distanceMeasureInstance.pointCost(bcNewCenters.value, point), cost)
-      }.persist(StorageLevel.MEMORY_AND_DISK)
+      }
+      if (!manageCaching) {
+        costs.persist(StorageLevel.MEMORY_AND_DISK)
+      }
       val sumCosts = costs.sum()
 
-      bcNewCenters.unpersist(blocking = false)
-      preCosts.unpersist(blocking = false)
+      if (!manageCaching) {
+        bcNewCenters.unpersist(blocking = false)
+        preCosts.unpersist(blocking = false)
+      }
 
       val chosen = data.zip(costs).mapPartitionsWithIndex { (index, pointCosts) =>
         val rand = new XORShiftRandom(seed ^ (step << 16) ^ index)
