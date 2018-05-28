@@ -22,6 +22,7 @@ import scala.reflect.ClassTag
 import org.apache.spark.Macros
 import org.apache.spark.graphx._
 import org.apache.spark.internal.config._
+import org.apache.spark.scheduler.SparkListenerTrace
 
 /** Strongly connected components algorithm implementation. */
 object StronglyConnectedComponents {
@@ -44,6 +45,7 @@ object StronglyConnectedComponents {
     val sparkContext = graph.vertices.sparkContext
     val manageCaching = sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
     val materialize = sparkContext.getConf.get(ITERATION_MATERIALIZE)
+    sparkContext.listenerBus.post(SparkListenerTrace(s"SCC start"))
 
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
@@ -60,9 +62,14 @@ object StronglyConnectedComponents {
     var iter = 0
     Macros.whileLoop(sparkContext, sccWorkGraph.numVertices > 0 && iter < numIter, {
       iter += 1
+      sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_outer start iteration=${iter}"))
 
       var first = true
+      var innerIter = 0
       Macros.whileLoop(sparkContext, first || sccWorkGraph.numVertices < numVertices, {
+        innerIter += 1
+        sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner start iteration=${innerIter}"))
+
         first = false
         numVertices = sccWorkGraph.numVertices
         sccWorkGraph = sccWorkGraph.outerJoinVertices(sccWorkGraph.outDegrees) {
@@ -103,6 +110,8 @@ object StronglyConnectedComponents {
         if (!manageCaching) {
           sccWorkGraph.cache()
         }
+
+        sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner end iteration=${innerIter}"))
       })
 
       // if iter < numIter at this point sccGraph that is returned
@@ -146,7 +155,10 @@ object StronglyConnectedComponents {
           },
           (final1, final2) => final1 || final2)
       }
+      sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_outer end iteration=${iter}"))
     })
+
+    sparkContext.listenerBus.post(SparkListenerTrace(s"SCC end"))
     sccGraph
   }
 

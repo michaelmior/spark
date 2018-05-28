@@ -25,6 +25,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.util.PeriodicRDDCheckpointer
+import org.apache.spark.scheduler.SparkListenerTrace
 
 /**
  * Implements a Pregel-like bulk-synchronous message-passing API.
@@ -127,12 +128,14 @@ object Pregel extends Logging {
     require(maxIterations > 0, s"Maximum number of iterations must be greater than 0," +
       s" but got ${maxIterations}")
 
-    val manageCaching = graph.vertices.sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
-    val checkpointInterval = graph.vertices.sparkContext.getConf
+    val sc = graph.vertices.sparkContext
+    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
+    val checkpointInterval = sc.getConf
       .getInt("spark.graphx.pregel.checkpointInterval", -1)
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg))
     val graphCheckpointer = new PeriodicGraphCheckpointer[VD, ED](
-      checkpointInterval, graph.vertices.sparkContext)
+      checkpointInterval, sc)
+    sc.listenerBus.post(SparkListenerTrace(s"Pregel start"))
 
     if (!manageCaching) {
       graphCheckpointer.update(g)
@@ -141,7 +144,7 @@ object Pregel extends Logging {
     // compute the messages
     var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg)
     val messageCheckpointer = new PeriodicRDDCheckpointer[(VertexId, A)](
-      checkpointInterval, graph.vertices.sparkContext)
+      checkpointInterval, sc)
     if (!manageCaching) {
       messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
     }
@@ -151,6 +154,7 @@ object Pregel extends Logging {
     var prevG: Graph[VD, ED] = null
     var i = 0
     Macros.whileLoop(graph.vertices.sparkContext, activeMessages > 0 && i < maxIterations, {
+      sc.listenerBus.post(SparkListenerTrace(s"Pregel start iteration=${i}"))
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog)
@@ -183,6 +187,7 @@ object Pregel extends Logging {
       }
 
       // count the iteration
+      sc.listenerBus.post(SparkListenerTrace(s"Pregel end iteration=${i}"))
       i += 1
     })
 
@@ -192,6 +197,7 @@ object Pregel extends Logging {
       messageCheckpointer.deleteAllCheckpoints()
     }
 
+    sc.listenerBus.post(SparkListenerTrace(s"Pregel end"))
     g
   } // end of apply
 

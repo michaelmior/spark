@@ -22,6 +22,7 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.Macros
 import org.apache.spark.annotation.Since
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.clustering.{KMeans => NewKMeans}
 import org.apache.spark.ml.util.Instrumentation
@@ -29,6 +30,7 @@ import org.apache.spark.mllib.linalg.{Vector, Vectors}
 import org.apache.spark.mllib.linalg.BLAS.{axpy, dot, scal}
 import org.apache.spark.mllib.util.MLUtils
 import org.apache.spark.rdd.RDD
+import org.apache.spark.scheduler.SparkListenerTrace
 import org.apache.spark.storage.StorageLevel
 import org.apache.spark.util.Utils
 import org.apache.spark.util.random.XORShiftRandom
@@ -269,6 +271,7 @@ class KMeans private (
       instr: Option[Instrumentation[NewKMeans]]): KMeansModel = {
 
     val sc = data.sparkContext
+    sc.listenerBus.post(SparkListenerTrace(s"KMeans start"))
 
     val initStartTime = System.nanoTime()
 
@@ -297,6 +300,7 @@ class KMeans private (
 
     // Execute iterations of Lloyd's algorithm until converged
     Macros.whileLoop(sc, iteration < maxIterations && !converged, {
+      sc.listenerBus.post(SparkListenerTrace(s"KMeans start iteration=${iteration}"))
       val costAccum = sc.doubleAccumulator
       val bcCenters = sc.broadcast(centers)
 
@@ -324,6 +328,7 @@ class KMeans private (
         scal(1.0 / count, sum)
         new VectorWithNorm(sum)
       }.collectAsMap()
+      sc.listenerBus.post(SparkListenerTrace(s"KMeans newCenters iteration=${iteration}"))
 
       bcCenters.destroy(blocking = false)
 
@@ -338,6 +343,7 @@ class KMeans private (
       }
 
       cost = costAccum.value
+      sc.listenerBus.post(SparkListenerTrace(s"KMeans end iteration=${iteration}"))
       iteration += 1
     })
 
@@ -376,6 +382,7 @@ class KMeans private (
    */
   private[clustering] def initKMeansParallel(data: RDD[VectorWithNorm],
       distanceMeasureInstance: DistanceMeasure): Array[VectorWithNorm] = {
+    val sc = data.sparkContext
     val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
     sc.listenerBus.post(SparkListenerTrace(s"KMeans_init start"))
 
@@ -398,6 +405,7 @@ class KMeans private (
     var step = 0
     val bcNewCentersList = ArrayBuffer[Broadcast[_]]()
     Macros.whileLoop(data.sparkContext, step < initializationSteps, {
+      sc.listenerBus.post(SparkListenerTrace(s"KMeans_init start iteration=${step}"))
       val bcNewCenters = data.context.broadcast(newCenters)
       bcNewCentersList += bcNewCenters
       val preCosts = costs
@@ -408,6 +416,7 @@ class KMeans private (
         costs.persist(StorageLevel.MEMORY_AND_DISK)
       }
       val sumCosts = costs.sum()
+      sc.listenerBus.post(SparkListenerTrace(s"KMeans_init costs iteration=${step}"))
 
       if (!manageCaching) {
         bcNewCenters.unpersist(blocking = false)
@@ -420,6 +429,7 @@ class KMeans private (
       }.collect()
       newCenters = chosen.map(_.toDense)
       centers ++= newCenters
+      sc.listenerBus.post(SparkListenerTrace(s"KMeans_init end iteration=${step}"))
       step += 1
     })
 
@@ -428,7 +438,7 @@ class KMeans private (
 
     val distinctCenters = centers.map(_.vector).distinct.map(new VectorWithNorm(_))
 
-    if (distinctCenters.size <= k) {
+    val initCenters = if (distinctCenters.size <= k) {
       distinctCenters.toArray
     } else {
       // Finally, we might have a set of more than k distinct candidate centers; weight each
@@ -444,6 +454,8 @@ class KMeans private (
       val myWeights = distinctCenters.indices.map(countMap.getOrElse(_, 0L).toDouble).toArray
       LocalKMeans.kMeansPlusPlus(0, distinctCenters.toArray, myWeights, k, 30)
     }
+    sc.listenerBus.post(SparkListenerTrace(s"KMeans_init end"))
+    initCenters
   }
 }
 
