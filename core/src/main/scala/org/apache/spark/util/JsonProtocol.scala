@@ -100,6 +100,8 @@ private[spark] object JsonProtocol {
         executorMetricsUpdateToJson(metricsUpdate)
       case blockUpdate: SparkListenerBlockUpdated =>
         blockUpdateToJson(blockUpdate)
+      case trace: SparkListenerTrace =>
+        traceToJson(trace)
       case _ => parse(mapper.writeValueAsString(event))
     }
   }
@@ -250,6 +252,12 @@ private[spark] object JsonProtocol {
     val blockUpdatedInfo = blockUpdatedInfoToJson(blockUpdate.blockUpdatedInfo)
     ("Event" -> SPARK_LISTENER_EVENT_FORMATTED_CLASS_NAMES.blockUpdate) ~
     ("Block Updated Info" -> blockUpdatedInfo)
+  }
+
+  def traceToJson(trace: SparkListenerTrace): JValue = {
+    ("Event" -> SPARK_LISTENER_EVENT_FORMATTED_CLASS_NAMES.trace) ~
+    ("Message" -> trace.message) ~
+    ("Timestamp" -> System.nanoTime)
   }
 
   /** ------------------------------------------------------------------- *
@@ -530,6 +538,7 @@ private[spark] object JsonProtocol {
     val logStart = Utils.getFormattedClassName(SparkListenerLogStart)
     val metricsUpdate = Utils.getFormattedClassName(SparkListenerExecutorMetricsUpdate)
     val blockUpdate = Utils.getFormattedClassName(SparkListenerBlockUpdated)
+    val trace = Utils.getFormattedClassName(SparkListenerTrace)
   }
 
   def sparkEventFromJson(json: JValue): SparkListenerEvent = {

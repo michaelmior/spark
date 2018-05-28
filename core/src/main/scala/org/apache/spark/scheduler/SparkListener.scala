@@ -167,6 +167,9 @@ case class SparkListenerApplicationEnd(time: Long) extends SparkListenerEvent
 @DeveloperApi
 case class SparkListenerLogStart(sparkVersion: String) extends SparkListenerEvent
 
+@DeveloperApi
+case class SparkListenerTrace(message: String) extends SparkListenerEvent
+
 /**
  * Interface for listening to events from the Spark scheduler. Most applications should probably
  * extend SparkListener or SparkFirehoseListener directly, rather than implementing this class.
@@ -287,6 +290,11 @@ private[spark] trait SparkListenerInterface {
   def onSpeculativeTaskSubmitted(speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit
 
   /**
+   * Called when a trace message is logged
+   */
+  def onTrace(trace: SparkListenerTrace): Unit
+
+  /**
    * Called when other events like SQL-specific events are posted.
    */
   def onOtherEvent(event: SparkListenerEvent): Unit
@@ -352,6 +360,8 @@ abstract class SparkListener extends SparkListenerInterface {
 
   override def onSpeculativeTaskSubmitted(
       speculativeTask: SparkListenerSpeculativeTaskSubmitted): Unit = { }
+
+  override def onTrace(trace: SparkListenerTrace): Unit = { }
 
   override def onOtherEvent(event: SparkListenerEvent): Unit = { }
 }
