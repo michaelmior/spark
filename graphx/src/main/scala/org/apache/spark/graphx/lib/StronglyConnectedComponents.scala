@@ -20,6 +20,8 @@ package org.apache.spark.graphx.lib
 import scala.reflect.ClassTag
 
 import org.apache.spark.graphx._
+import org.apache.spark.internal.config._
+import org.apache.spark.scheduler.SparkListenerTrace
 
 /** Strongly connected components algorithm implementation. */
 object StronglyConnectedComponents {
@@ -39,6 +41,9 @@ object StronglyConnectedComponents {
     require(numIter > 0, s"Number of iterations must be greater than 0," +
       s" but got ${numIter}")
 
+    val sparkContext = graph.vertices.sparkContext
+    sparkContext.listenerBus.post(SparkListenerTrace(s"SCC start"))
+
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
     // graph we are going to work with in our iterations
@@ -51,7 +56,11 @@ object StronglyConnectedComponents {
     var iter = 0
     while (sccWorkGraph.numVertices > 0 && iter < numIter) {
       iter += 1
+      sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_outer start iteration=${iter}"))
+      var innerIter = 0
       do {
+        innerIter += 1
+        sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner start iteration=${innerIter}"))
         numVertices = sccWorkGraph.numVertices
         sccWorkGraph = sccWorkGraph.outerJoinVertices(sccWorkGraph.outDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
@@ -77,6 +86,7 @@ object StronglyConnectedComponents {
 
         // only keep vertices that are not final
         sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2).cache()
+        sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner end iteration=${innerIter}"))
       } while (sccWorkGraph.numVertices < numVertices)
 
       // if iter < numIter at this point sccGraph that is returned
@@ -120,7 +130,10 @@ object StronglyConnectedComponents {
           },
           (final1, final2) => final1 || final2)
       }
+      sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_outer end iteration=${iter}"))
     }
+
+    sparkContext.listenerBus.post(SparkListenerTrace(s"SCC end"))
     sccGraph
   }
 

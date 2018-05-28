@@ -23,6 +23,7 @@ import org.apache.spark.graphx.util.PeriodicGraphCheckpointer
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.util.PeriodicRDDCheckpointer
+import org.apache.spark.scheduler.SparkListenerTrace
 
 /**
  * Implements a Pregel-like bulk-synchronous message-passing API.
@@ -125,6 +126,7 @@ object Pregel extends Logging {
     require(maxIterations > 0, s"Maximum number of iterations must be greater than 0," +
       s" but got ${maxIterations}")
 
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel start"))
     val checkpointInterval = graph.vertices.sparkContext.getConf
       .getInt("spark.graphx.pregel.checkpointInterval", -1)
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg))
@@ -143,6 +145,7 @@ object Pregel extends Logging {
     var prevG: Graph[VD, ED] = null
     var i = 0
     while (activeMessages > 0 && i < maxIterations) {
+      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel start iteration=${i}"))
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog)
@@ -167,11 +170,14 @@ object Pregel extends Logging {
       prevG.unpersistVertices(blocking = false)
       prevG.edges.unpersist(blocking = false)
       // count the iteration
+      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel end iteration=${i}"))
       i += 1
     }
     messageCheckpointer.unpersistDataSet()
     graphCheckpointer.deleteAllCheckpoints()
     messageCheckpointer.deleteAllCheckpoints()
+
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel end"))
     g
   } // end of apply
 

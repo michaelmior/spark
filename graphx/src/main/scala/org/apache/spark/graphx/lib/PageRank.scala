@@ -24,6 +24,7 @@ import breeze.linalg.{Vector => BV}
 import org.apache.spark.graphx._
 import org.apache.spark.internal.Logging
 import org.apache.spark.ml.linalg.{Vector, Vectors}
+import org.apache.spark.scheduler.SparkListenerTrace
 
 /**
  * PageRank algorithm implementation. There are two implementations of PageRank implemented.
@@ -113,6 +114,7 @@ object PageRank extends Logging {
 
     val personalized = srcId.isDefined
     val src: VertexId = srcId.getOrElse(-1L)
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start"))
 
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each vertex with attribute 1.0.
@@ -134,6 +136,7 @@ object PageRank extends Logging {
     var prevRankGraph: Graph[Double, Double] = null
     while (iteration < numIter) {
       rankGraph.cache()
+      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start iteration=${iteration}"))
 
       // Compute the outgoing rank contributions of each vertex, perform local preaggregation, and
       // do the final aggregation at the receiving vertices. Requires a shuffle for aggregation.
@@ -159,11 +162,16 @@ object PageRank extends Logging {
       prevRankGraph.vertices.unpersist(false)
       prevRankGraph.edges.unpersist(false)
 
+      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank end iteration=${iteration}"))
       iteration += 1
     }
 
     // SPARK-18847 If the graph has sinks (vertices with no outgoing edges) correct the sum of ranks
-    normalizeRankSum(rankGraph, personalized)
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank_normalize start"))
+    val sum = normalizeRankSum(rankGraph, personalized)
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank_normalize end"))
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start"))
+    sum
   }
 
   /**
