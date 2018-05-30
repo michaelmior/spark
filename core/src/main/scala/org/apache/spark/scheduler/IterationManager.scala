@@ -67,7 +67,7 @@ class IterationManager(
 
   def iterateLoop(loopId: Int): Unit = {
     assert(currentLoop.top == loopId, "Error iterating loop")
-    if (currentIteration.top == 1 && !loopsCounted.contains(currentLoop.top)) {
+    if (currentIteration.top == 1 && !loopsCounted.contains(loopId)) {
       loopRdds(loopId).filter { rdd =>
         // Check that this RDD has not been moved outside the loop
         if (rdd.loop.isEmpty) {
