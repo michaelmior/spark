@@ -136,7 +136,8 @@ object PageRank extends Logging {
     var prevRankGraph: Graph[Double, Double] = null
     while (iteration < numIter) {
       rankGraph.cache()
-      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start iteration=${iteration}"))
+      graph.vertices.sparkContext.listenerBus.post(
+        SparkListenerTrace(s"PageRank start iteration=${iteration}"))
 
       // Compute the outgoing rank contributions of each vertex, perform local preaggregation, and
       // do the final aggregation at the receiving vertices. Requires a shuffle for aggregation.
@@ -162,7 +163,8 @@ object PageRank extends Logging {
       prevRankGraph.vertices.unpersist(false)
       prevRankGraph.edges.unpersist(false)
 
-      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank end iteration=${iteration}"))
+      graph.vertices.sparkContext.listenerBus.post(
+        SparkListenerTrace(s"PageRank end iteration=${iteration}"))
       iteration += 1
     }
 
