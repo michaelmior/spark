@@ -22,8 +22,8 @@ import scala.collection.mutable.ArrayBuffer
 import org.apache.spark.Macros
 import org.apache.spark.annotation.Since
 import org.apache.spark.broadcast.Broadcast
-import org.apache.spark.internal.config._
 import org.apache.spark.internal.Logging
+import org.apache.spark.internal.config._
 import org.apache.spark.ml.clustering.{KMeans => NewKMeans}
 import org.apache.spark.ml.util.Instrumentation
 import org.apache.spark.mllib.linalg.{Vector, Vectors}

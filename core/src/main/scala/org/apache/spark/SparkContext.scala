@@ -1337,17 +1337,17 @@ class SparkContext(config: SparkConf) extends Logging {
     iterationManager.getCurrentIteration()
   }
 
-  private[spark] def startLoop(): Int = {
+  def startLoop(): Int = {
     val loopId = Utils.getCallSite().longForm.hashCode
     iterationManager.startLoop(loopId)
     loopId
   }
 
-  private[spark] def iterateLoop(loopId: Int): Unit = {
+  def iterateLoop(loopId: Int): Unit = {
     iterationManager.iterateLoop(loopId)
   }
 
-  private[spark] def endLoop(loopId: Int): Unit = {
+  def endLoop(loopId: Int): Unit = {
     iterationManager.endLoop(loopId)
   }
 
