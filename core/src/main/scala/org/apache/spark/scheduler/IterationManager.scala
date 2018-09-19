@@ -82,7 +82,13 @@ class IterationManager(
               }
             } else {
               val tag = dep.rdd.callSiteTag
-              useCount(tag) = useCount.getOrElse(tag, 0) + 1
+              val newCount = useCount.getOrElse(tag, 0) + 1
+              useCount(tag) = newCount
+
+              // Persist this RDD if the reuse count has grown
+              if (newCount > 1 && manageCaching && !dep.rdd.implicitlyPersisted) {
+                dep.rdd.implicitPersist()
+              }
             }
           }
         }
