@@ -19,10 +19,8 @@ package org.apache.spark.graphx
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.Macros
 import org.apache.spark.graphx.util.PeriodicGraphCheckpointer
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config._
 import org.apache.spark.rdd.RDD
 import org.apache.spark.rdd.util.PeriodicRDDCheckpointer
 import org.apache.spark.scheduler.SparkListenerTrace
@@ -128,40 +126,31 @@ object Pregel extends Logging {
     require(maxIterations > 0, s"Maximum number of iterations must be greater than 0," +
       s" but got ${maxIterations}")
 
-    val sc = graph.vertices.sparkContext
-    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
-    val checkpointInterval = sc.getConf
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel start"))
+    val checkpointInterval = graph.vertices.sparkContext.getConf
       .getInt("spark.graphx.pregel.checkpointInterval", -1)
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg))
     val graphCheckpointer = new PeriodicGraphCheckpointer[VD, ED](
-      checkpointInterval, sc)
-    sc.listenerBus.post(SparkListenerTrace(s"Pregel start"))
-
-    if (!manageCaching) {
-      graphCheckpointer.update(g)
-    }
+      checkpointInterval, graph.vertices.sparkContext)
+    graphCheckpointer.update(g)
 
     // compute the messages
     var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg)
     val messageCheckpointer = new PeriodicRDDCheckpointer[(VertexId, A)](
-      checkpointInterval, sc)
-    if (!manageCaching) {
-      messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
-    }
+      checkpointInterval, graph.vertices.sparkContext)
+    messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
     var activeMessages = messages.count()
 
     // Loop
     var prevG: Graph[VD, ED] = null
     var i = 0
-    Macros.whileLoop(graph.vertices.sparkContext, activeMessages > 0 && i < maxIterations, {
-      sc.listenerBus.post(SparkListenerTrace(s"Pregel start iteration=${i}"))
+    while (activeMessages > 0 && i < maxIterations) {
+      graph.vertices.sparkContext.listenerBus.post(
+        SparkListenerTrace(s"Pregel start iteration=${i}"))
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog)
-
-      if (!manageCaching) {
-        graphCheckpointer.update(g)
-      }
+      graphCheckpointer.update(g)
 
       val oldMessages = messages
       // Send new messages, skipping edges where neither side received a message. We must cache
@@ -172,32 +161,24 @@ object Pregel extends Logging {
       // The call to count() materializes `messages` and the vertices of `g`. This hides oldMessages
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).
-      if (!manageCaching) {
-        messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
-      }
+      messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
       activeMessages = messages.count()
 
       logInfo("Pregel finished iteration " + i)
 
-      if (!manageCaching) {
-        // Unpersist the RDDs hidden by newly-materialized RDDs
-        oldMessages.unpersist(blocking = false)
-        prevG.unpersistVertices(blocking = false)
-        prevG.edges.unpersist(blocking = false)
-      }
-
+      // Unpersist the RDDs hidden by newly-materialized RDDs
+      oldMessages.unpersist(blocking = false)
+      prevG.unpersistVertices(blocking = false)
+      prevG.edges.unpersist(blocking = false)
       // count the iteration
-      sc.listenerBus.post(SparkListenerTrace(s"Pregel end iteration=${i}"))
+      graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel end iteration=${i}"))
       i += 1
-    })
-
-    if (!manageCaching) {
-      messageCheckpointer.unpersistDataSet()
-      graphCheckpointer.deleteAllCheckpoints()
-      messageCheckpointer.deleteAllCheckpoints()
     }
+    messageCheckpointer.unpersistDataSet()
+    graphCheckpointer.deleteAllCheckpoints()
+    messageCheckpointer.deleteAllCheckpoints()
 
-    sc.listenerBus.post(SparkListenerTrace(s"Pregel end"))
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel end"))
     g
   } // end of apply
 

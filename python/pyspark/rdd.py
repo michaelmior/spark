@@ -50,7 +50,7 @@ from pyspark.storagelevel import StorageLevel
 from pyspark.resultiterable import ResultIterable
 from pyspark.shuffle import Aggregator, ExternalMerger, \
     get_used_memory, ExternalSorter, ExternalGroupBy
-from pyspark.traceback_utils import SCCallSiteSync, stack_trace
+from pyspark.traceback_utils import SCCallSiteSync
 
 
 __all__ = ["RDD"]
@@ -2426,20 +2426,11 @@ class PipelinedRDD(RDD):
     """
 
     def __init__(self, prev, func, preservesPartitioning=False):
-        same_loop = getattr(prev, '_loop', None) == \
-            (prev.ctx._getCurrentLoop(), prev.ctx._getCurrentIteration())
-        if not isinstance(prev, PipelinedRDD) or \
-                not prev._is_pipelinable() or not same_loop:
+        if not isinstance(prev, PipelinedRDD) or not prev._is_pipelinable():
             # This transformation is the first in its stage:
             self.func = func
             self.preservesPartitioning = preservesPartitioning
             self._prev_jrdd = prev._jrdd
-
-            if hasattr(prev, '_loop') and not prev._loop[0].isEmpty():
-                prev._jrdd.setLoop(prev._loop[0].get(), prev._loop[1].get())
-            else:
-                prev._jrdd.clearLoop()
-
             self._prev_jrdd_deserializer = prev._jrdd_deserializer
         else:
             prev_func = prev.func
@@ -2454,7 +2445,6 @@ class PipelinedRDD(RDD):
         self.is_cached = False
         self.is_checkpointed = False
         self.ctx = prev.ctx
-        self._loop = (self.ctx._getCurrentLoop(), self.ctx._getCurrentIteration())
         self.prev = prev
         self._jrdd_val = None
         self._id = None
@@ -2480,8 +2470,7 @@ class PipelinedRDD(RDD):
         wrapped_func = _wrap_function(self.ctx, self.func, self._prev_jrdd_deserializer,
                                       self._jrdd_deserializer, profiler)
         python_rdd = self.ctx._jvm.PythonRDD(self._prev_jrdd.rdd(), wrapped_func,
-                                             self.preservesPartitioning,
-                                             self.ctx._jvm.PythonUtils.toOption(stack_trace()))
+                                             self.preservesPartitioning)
         self._jrdd_val = python_rdd.asJavaRDD()
 
         if profiler:

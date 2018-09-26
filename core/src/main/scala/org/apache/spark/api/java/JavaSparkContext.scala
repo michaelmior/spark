@@ -140,14 +140,6 @@ class JavaSparkContext(val sc: SparkContext)
     JavaRDD.fromRDD(new EmptyRDD[T](sc))
   }
 
-
-  def getCurrentLoop(): Option[Int] = { sc.getCurrentLoop() }
-  def getCurrentIteration(): Option[Int] = { sc.getCurrentIteration() }
-  def startLoop(): Int = { sc.startLoop() }
-  def iterateLoop(loopId: Int): Unit = { sc.iterateLoop(loopId) }
-  def endLoop(loopId: Int): Unit = { sc.endLoop(loopId) }
-
-
   /** Distribute a local Scala collection to form an RDD. */
   def parallelize[T](list: java.util.List[T]): JavaRDD[T] =
     parallelize(list, sc.defaultParallelism)

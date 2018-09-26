@@ -35,21 +35,6 @@ class JavaRDD[T](
 
   override def wrapRDD(rdd: RDD[T]): JavaRDD[T] = JavaRDD.fromRDD(rdd, stackTrace)
 
-  def loop: Option[Int] = {
-    rdd.loop match {
-      case Some(itLoop) => Some(itLoop.loop)
-      case None => None
-    }
-  }
-
-  def setLoop(loop: Int, counter: Int): Unit = {
-    rdd.setLoop(loop, counter)
-  }
-
-  def clearLoop(): Unit = {
-    rdd.clearLoop()
-  }
-
   // Common RDD functions
 
   /**

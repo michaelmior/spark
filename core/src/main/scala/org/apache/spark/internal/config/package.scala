@@ -103,22 +103,6 @@ package object config {
     .bytesConf(ByteUnit.MiB)
     .createOptional
 
-  private[spark] val ITERATION_MANAGE_CACHING = ConfigBuilder("spark.iteration.manageCaching")
-    .booleanConf
-    .createWithDefault(true)
-
-  private[spark] val ITERATION_MATERIALIZE = ConfigBuilder("spark.iteration.materialize")
-    .booleanConf
-    .createWithDefault(false)
-
-  private[spark] val ITERATION_OUTSIDE_CACHING = ConfigBuilder("spark.iteration.outsideCaching")
-    .booleanConf
-    .createWithDefault(true)
-
-  private[spark] val ITERATION_UNPERSIST = ConfigBuilder("spark.iteration.unpersist")
-    .booleanConf
-    .createWithDefault(true)
-
   private[spark] val MEMORY_OFFHEAP_ENABLED = ConfigBuilder("spark.memory.offHeap.enabled")
     .doc("If true, Spark will attempt to use off-heap memory for certain operations. " +
       "If off-heap memory use is enabled, then spark.memory.offHeap.size must be positive.")
@@ -489,6 +473,14 @@ package object config {
       .doc("Memory to request as a multiple of the size that used to unroll the block.")
       .doubleConf
       .createWithDefault(1.5)
+
+  private[spark] val IMPLICIT_PERSIST = ConfigBuilder("spark.rdd.implicitPersist.enabled")
+    .booleanConf
+    .createWithDefault(true)
+
+  private[spark] val IMPLICIT_UNPERSIST = ConfigBuilder("spark.rdd.implicitUnpersist.enabled")
+    .booleanConf
+    .createWithDefault(true)
 
   private[spark] val FORCE_DOWNLOAD_SCHEMES =
     ConfigBuilder("spark.yarn.dist.forceDownloadSchemes")

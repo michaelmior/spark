@@ -202,7 +202,6 @@ class SparkContext(config: SparkConf) extends Logging {
   private var _taskScheduler: TaskScheduler = _
   private var _heartbeatReceiver: RpcEndpointRef = _
   @volatile private var _dagScheduler: DAGScheduler = _
-  private var _iterationManager: IterationManager = _
   private var _applicationId: String = _
   private var _applicationAttemptId: Option[String] = None
   private var _eventLogger: Option[EventLoggingListener] = None
@@ -304,11 +303,6 @@ class SparkContext(config: SparkConf) extends Logging {
     _dagScheduler = ds
   }
 
-  private[spark] def iterationManager: IterationManager = _iterationManager
-  private[spark] def iterationManager_=(im: IterationManager): Unit = {
-    _iterationManager = im
-  }
-
   /**
    * A unique identifier for the Spark application.
    * Its format depends on the scheduler implementation.
@@ -338,6 +332,12 @@ class SparkContext(config: SparkConf) extends Logging {
       SerializationUtils.clone(parent)
     }
     override protected def initialValue(): Properties = new Properties()
+  }
+
+  private[spark] def isImplicitPersistEnabled: Boolean = _conf.get(IMPLICIT_PERSIST)
+
+  private[spark] val usePredictor: RDDUsePredictor = {
+    new SimpleReusePredictor()
   }
 
   /* ------------------------------------------------------------------------------------- *
@@ -500,7 +500,6 @@ class SparkContext(config: SparkConf) extends Logging {
     _taskScheduler = ts
     _dagScheduler = new DAGScheduler(this)
     _heartbeatReceiver.ask[Boolean](TaskSchedulerIsSet)
-    _iterationManager = new IterationManager(this)
 
     // start TaskScheduler after taskScheduler sets DAGScheduler reference in DAGScheduler's
     // constructor
@@ -1327,30 +1326,6 @@ class SparkContext(config: SparkConf) extends Logging {
   /** Get an RDD that has no partitions or elements. */
   def emptyRDD[T: ClassTag]: RDD[T] = new EmptyRDD[T](this)
 
-  // Methods for tracking higher level application control flow
-
-  private[spark] def getCurrentLoop(): Option[Int] = {
-    iterationManager.getCurrentLoop()
-  }
-
-  private[spark] def getCurrentIteration(): Option[Int] = {
-    iterationManager.getCurrentIteration()
-  }
-
-  def startLoop(): Int = {
-    val loopId = Utils.getCallSite().longForm.hashCode
-    iterationManager.startLoop(loopId)
-    loopId
-  }
-
-  def iterateLoop(loopId: Int): Unit = {
-    iterationManager.iterateLoop(loopId)
-  }
-
-  def endLoop(loopId: Int): Unit = {
-    iterationManager.endLoop(loopId)
-  }
-
   // Methods for creating shared variables
 
   /**
@@ -2050,12 +2025,12 @@ class SparkContext(config: SparkConf) extends Logging {
       throw new IllegalStateException("SparkContext has been shutdown")
     }
     val callSite = getCallSite
+    usePredictor.trackAction(rdd, callSite)
     val cleanedFunc = clean(func)
     logInfo("Starting job: " + callSite.shortForm)
     if (conf.getBoolean("spark.logLineage", false)) {
       logInfo("RDD's recursive dependencies:\n" + rdd.toDebugString)
     }
-    iterationManager.markLoopRddUsed(rdd)
     dagScheduler.runJob(rdd, cleanedFunc, partitions, callSite, resultHandler, localProperties.get)
     progressBar.foreach(_.finishAll())
     rdd.doCheckpoint()
@@ -2175,10 +2150,10 @@ class SparkContext(config: SparkConf) extends Logging {
       timeout: Long): PartialResult[R] = {
     assertNotStopped()
     val callSite = getCallSite
+    usePredictor.trackAction(rdd, callSite)
     logInfo("Starting job: " + callSite.shortForm)
     val start = System.nanoTime
     val cleanedFunc = clean(func)
-    iterationManager.markLoopRddUsed(rdd)
     val result = dagScheduler.runApproximateJob(rdd, cleanedFunc, evaluator, callSite, timeout,
       localProperties.get)
     logInfo(
@@ -2206,7 +2181,7 @@ class SparkContext(config: SparkConf) extends Logging {
     assertNotStopped()
     val cleanF = clean(processPartition)
     val callSite = getCallSite
-    iterationManager.markLoopRddUsed(rdd)
+    usePredictor.trackAction(rdd, callSite)
     val waiter = dagScheduler.submitJob(
       rdd,
       (context: TaskContext, iter: Iterator[T]) => cleanF(iter),
@@ -2375,11 +2350,14 @@ class SparkContext(config: SparkConf) extends Logging {
 
   /** Register a new RDD, returning its RDD ID */
   private[spark] def newRddId(): Int = nextRddId.getAndIncrement()
-  private[spark] def registerRdd(rdd: RDD[_]): (Int, Option[IterationLoop]) = {
+  private[spark] def registerRdd(rdd: RDD[_]): Int = {
     val rddId = nextRddId.getAndIncrement()
     rdd.id = rddId
-    val loop = iterationManager.registerRdd(rdd)
-    (rddId, loop)
+    rdd.dependencies.foreach { dep => usePredictor.trackUse(rdd, dep.rdd) }
+    if (isImplicitPersistEnabled && usePredictor.predictReuse(rdd)) {
+      rdd.implicitPersist()
+    }
+    rddId
   }
 
   /**

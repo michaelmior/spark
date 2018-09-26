@@ -21,7 +21,6 @@ import org.apache.spark.SparkEnv
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.internal.config._
 import org.apache.spark.rdd.{RDD, RDDOperationScope}
-import org.apache.spark.scheduler.IterationLoop
 import org.apache.spark.util.Utils
 
 @DeveloperApi
@@ -32,8 +31,7 @@ class RDDInfo(
     var storageLevel: StorageLevel,
     val parentIds: Seq[Int],
     val callSite: String = "",
-    val scope: Option[RDDOperationScope] = None,
-    val loop: Option[IterationLoop] = None)
+    val scope: Option[RDDOperationScope] = None)
   extends Ordered[RDDInfo] {
 
   var numCachedPartitions = 0
@@ -67,6 +65,6 @@ private[spark] object RDDInfo {
       case "long" => rdd.creationSite.longForm
     }
     new RDDInfo(rdd.id, rddName, rdd.partitions.length,
-      rdd.getStorageLevel, parentIds, callSite, rdd.scope, rdd.loop)
+      rdd.getStorageLevel, parentIds, callSite, rdd.scope)
   }
 }

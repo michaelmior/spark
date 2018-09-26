@@ -21,10 +21,8 @@ import scala.reflect.ClassTag
 
 import breeze.linalg.{Vector => BV}
 
-import org.apache.spark.Macros
 import org.apache.spark.graphx._
 import org.apache.spark.internal.Logging
-import org.apache.spark.internal.config._
 import org.apache.spark.ml.linalg.{Vector, Vectors}
 import org.apache.spark.scheduler.SparkListenerTrace
 
@@ -116,10 +114,7 @@ object PageRank extends Logging {
 
     val personalized = srcId.isDefined
     val src: VertexId = srcId.getOrElse(-1L)
-    val sc = graph.vertices.sparkContext
-    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
-    val materialize = sc.getConf.get(ITERATION_MATERIALIZE)
-    sc.listenerBus.post(SparkListenerTrace(s"PageRank start"))
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start"))
 
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each vertex with attribute 1.0.
@@ -139,11 +134,10 @@ object PageRank extends Logging {
 
     var iteration = 0
     var prevRankGraph: Graph[Double, Double] = null
-    Macros.whileLoop(sc, iteration < numIter, {
-      sc.listenerBus.post(SparkListenerTrace(s"PageRank start iteration=${iteration}"))
-      if (!manageCaching) {
-        rankGraph.cache()
-      }
+    while (iteration < numIter) {
+      rankGraph.cache()
+      graph.vertices.sparkContext.listenerBus.post(
+        SparkListenerTrace(s"PageRank start iteration=${iteration}"))
 
       // Compute the outgoing rank contributions of each vertex, perform local preaggregation, and
       // do the final aggregation at the receiving vertices. Requires a shuffle for aggregation.
@@ -162,29 +156,23 @@ object PageRank extends Logging {
 
       rankGraph = rankGraph.outerJoinVertices(rankUpdates) {
         (id, oldRank, msgSumOpt) => rPrb(src, id) + (1.0 - resetProb) * msgSumOpt.getOrElse(0.0)
-      }
+      }.cache()
 
-      if (!manageCaching) {
-        rankGraph.cache()
-      }
-      if (materialize) {
-        rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
-      }
+      rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
       logInfo(s"PageRank finished iteration $iteration.")
-      if (!manageCaching) {
-        prevRankGraph.vertices.lazyUnpersist()
-        prevRankGraph.edges.lazyUnpersist()
-      }
+      prevRankGraph.vertices.unpersist(false)
+      prevRankGraph.edges.unpersist(false)
 
-      sc.listenerBus.post(SparkListenerTrace(s"PageRank end iteration=${iteration}"))
+      graph.vertices.sparkContext.listenerBus.post(
+        SparkListenerTrace(s"PageRank end iteration=${iteration}"))
       iteration += 1
-    })
+    }
 
     // SPARK-18847 If the graph has sinks (vertices with no outgoing edges) correct the sum of ranks
-    sc.listenerBus.post(SparkListenerTrace(s"PageRank_normalize start"))
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank_normalize start"))
     val sum = normalizeRankSum(rankGraph, personalized)
-    sc.listenerBus.post(SparkListenerTrace(s"PageRank_normalize end"))
-    sc.listenerBus.post(SparkListenerTrace(s"PageRank start"))
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank_normalize end"))
+    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start"))
     sum
   }
 
@@ -226,8 +214,6 @@ object PageRank extends Logging {
       (vid, v)
     }.toMap
     val sc = graph.vertices.sparkContext
-    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
-    val materialize = sc.getConf.get(ITERATION_MATERIALIZE)
     val sourcesInitMapBC = sc.broadcast(sourcesInitMap)
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each source vertex with attribute 1.0.
@@ -245,7 +231,7 @@ object PageRank extends Logging {
       }
 
     var i = 0
-    Macros.whileLoop(sc, i < numIter, {
+    while (i < numIter) {
       val prevRankGraph = rankGraph
       // Propagates the message along outbound edges
       // and adding start nodes back in with activation resetProb
@@ -262,22 +248,16 @@ object PageRank extends Logging {
             zero
           }
           popActivations +:+ resetActivations
-        }
-      if (!manageCaching) {
-        rankGraph.cache()
-      }
-      if (materialize) {
-        rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
-      }
-      if (!manageCaching) {
-        prevRankGraph.vertices.lazyUnpersist()
-        prevRankGraph.edges.lazyUnpersist()
-      }
+        }.cache()
+
+      rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
+      prevRankGraph.vertices.unpersist(false)
+      prevRankGraph.edges.unpersist(false)
 
       logInfo(s"Parallel Personalized PageRank finished iteration $i.")
 
       i += 1
-    })
+    }
 
     // SPARK-18847 If the graph has sinks (vertices with no outgoing edges) correct the sum of ranks
     val rankSums = rankGraph.vertices.values.fold(zero)(_ +:+ _)
@@ -345,11 +325,7 @@ object PageRank extends Logging {
       .mapVertices { (id, attr) =>
         if (id == src) (0.0, Double.NegativeInfinity) else (0.0, 0.0)
       }
-
-    val manageCaching = graph.vertices.sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
-    if (!manageCaching) {
-      pagerankGraph.cache()
-    }
+      .cache()
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel

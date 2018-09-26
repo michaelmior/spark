@@ -19,7 +19,6 @@ package org.apache.spark.graphx.lib
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.Macros
 import org.apache.spark.graphx._
 import org.apache.spark.internal.config._
 import org.apache.spark.scheduler.SparkListenerTrace
@@ -43,43 +42,31 @@ object StronglyConnectedComponents {
       s" but got ${numIter}")
 
     val sparkContext = graph.vertices.sparkContext
-    val manageCaching = sparkContext.getConf.get(ITERATION_MANAGE_CACHING)
-    val materialize = sparkContext.getConf.get(ITERATION_MATERIALIZE)
     sparkContext.listenerBus.post(SparkListenerTrace(s"SCC start"))
 
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
     // graph we are going to work with in our iterations
-    var sccWorkGraph = graph.mapVertices { case (vid, _) => (vid, false) }
-    if (!manageCaching) {
-      sccWorkGraph.cache()
-    }
+    var sccWorkGraph = graph.mapVertices { case (vid, _) => (vid, false) }.cache()
 
     // helper variables to unpersist cached graphs
     var prevSccGraph = sccGraph
 
     var numVertices = sccWorkGraph.numVertices
     var iter = 0
-    Macros.whileLoop(sparkContext, sccWorkGraph.numVertices > 0 && iter < numIter, {
+    while (sccWorkGraph.numVertices > 0 && iter < numIter) {
       iter += 1
       sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_outer start iteration=${iter}"))
-
-      var first = true
       var innerIter = 0
-      Macros.whileLoop(sparkContext, first || sccWorkGraph.numVertices < numVertices, {
+      do {
         innerIter += 1
         sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner start iteration=${innerIter}"))
-
-        first = false
         numVertices = sccWorkGraph.numVertices
         sccWorkGraph = sccWorkGraph.outerJoinVertices(sccWorkGraph.outDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
         }.outerJoinVertices(sccWorkGraph.inDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
-        }
-        if (!manageCaching) {
-          sccWorkGraph.cache()
-        }
+        }.cache()
 
         // get all vertices to be removed
         val finalVertices = sccWorkGraph.vertices
@@ -89,30 +76,18 @@ object StronglyConnectedComponents {
         // write values to sccGraph
         sccGraph = sccGraph.outerJoinVertices(finalVertices) {
           (vid, scc, opt) => opt.getOrElse(scc)
-        }
-
-        if (!manageCaching) {
-          sccGraph.cache()
-        }
-        if (materialize) {
-          // materialize vertices and edges
-          sccGraph.vertices.count()
-          sccGraph.edges.count()
-        }
-        if (!manageCaching) {
-          // sccGraph materialized so, unpersist can be done on previous
-          prevSccGraph.unpersist(blocking = false)
-          prevSccGraph = sccGraph
-        }
+        }.cache()
+        // materialize vertices and edges
+        sccGraph.vertices.count()
+        sccGraph.edges.count()
+        // sccGraph materialized so, unpersist can be done on previous
+        prevSccGraph.unpersist(blocking = false)
+        prevSccGraph = sccGraph
 
         // only keep vertices that are not final
-        sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2)
-        if (!manageCaching) {
-          sccWorkGraph.cache()
-        }
-
+        sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2).cache()
         sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner end iteration=${innerIter}"))
-      })
+      } while (sccWorkGraph.numVertices < numVertices)
 
       // if iter < numIter at this point sccGraph that is returned
       // will not be recomputed and pregel executions are pointless
@@ -156,7 +131,7 @@ object StronglyConnectedComponents {
           (final1, final2) => final1 || final2)
       }
       sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_outer end iteration=${iter}"))
-    })
+    }
 
     sparkContext.listenerBus.post(SparkListenerTrace(s"SCC end"))
     sccGraph

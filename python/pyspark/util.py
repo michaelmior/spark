@@ -37,25 +37,6 @@ def _exception_message(excp):
         return excp.message
     return str(excp)
 
-class whileLoop:
-    def __init__(self, sc, continueCheck):
-        self._sc = sc
-        self._continueCheck = continueCheck
-        self._loopId = sc._startLoop()
-        self._first = True
-
-    def __iter__(self):
-        return self
-
-    def next(self):
-        if not self._continueCheck():
-            self._sc._endLoop(self._loopId)
-            raise StopIteration()
-        else:
-            if not self._first:
-                self._sc._iterateLoop(self._loopId)
-            self._first = False
-            return None
 
 if __name__ == "__main__":
     import doctest

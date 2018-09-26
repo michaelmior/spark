@@ -40,7 +40,6 @@ import org.apache.spark.partial.BoundedDouble
 import org.apache.spark.partial.CountEvaluator
 import org.apache.spark.partial.GroupedCountEvaluator
 import org.apache.spark.partial.PartialResult
-import org.apache.spark.scheduler.IterationLoop
 import org.apache.spark.storage.{RDDBlockId, StorageLevel}
 import org.apache.spark.util.{BoundedPriorityQueue, CallSite, Utils}
 import org.apache.spark.util.collection.{OpenHashMap, Utils => collectionUtils}
@@ -161,6 +160,8 @@ abstract class RDD[T: ClassTag](
     }
   }
 
+  private[spark] var checkpointData: Option[RDDCheckpointData[T]] = None
+
   private[spark] val callSiteTag = creationSite.longForm.hashCode
   private var storageLevel: StorageLevel = StorageLevel.NONE
   private[spark] var implicitlyPersisted: Boolean = false
@@ -169,7 +170,7 @@ abstract class RDD[T: ClassTag](
   private[spark] var reuseCount: Option[Int] = None
 
   /** A unique ID for this RDD (within its SparkContext). */
-  var (id: Int, loop: Option[IterationLoop]) = sc.registerRdd(this)
+  var id: Int = sc.registerRdd(this)
 
   /** A friendly name for this RDD */
   @transient var name: String = _
@@ -177,16 +178,6 @@ abstract class RDD[T: ClassTag](
   /** Assign a name to this RDD */
   def setName(_name: String): this.type = {
     name = _name
-    this
-  }
-
-  def setLoop(loopId: Int, counter: Int): this.type = {
-    loop = Some(IterationLoop(loopId, counter))
-    this
-  }
-
-  def clearLoop(): this.type = {
-    loop = None
     this
   }
 
@@ -1727,8 +1718,6 @@ abstract class RDD[T: ClassTag](
   private[spark] def getCreationSite: String = Option(creationSite).map(_.shortForm).getOrElse("")
 
   private[spark] def elementClassTag: ClassTag[T] = classTag[T]
-
-  private[spark] var checkpointData: Option[RDDCheckpointData[T]] = None
 
   // Whether to checkpoint all ancestor RDDs that are marked for checkpointing. By default,
   // we stop as soon as we find the first such RDD, an optimization that allows us to write

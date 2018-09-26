@@ -19,7 +19,6 @@ package org.apache.spark.mllib.clustering
 
 import scala.collection.mutable.ArrayBuffer
 
-import org.apache.spark.Macros
 import org.apache.spark.annotation.Since
 import org.apache.spark.broadcast.Broadcast
 import org.apache.spark.internal.Logging
@@ -299,7 +298,7 @@ class KMeans private (
     instr.foreach(_.logNumFeatures(centers.head.vector.size))
 
     // Execute iterations of Lloyd's algorithm until converged
-    Macros.whileLoop(sc, iteration < maxIterations && !converged, {
+    while (iteration < maxIterations && !converged) {
       sc.listenerBus.post(SparkListenerTrace(s"KMeans start iteration=${iteration}"))
       val costAccum = sc.doubleAccumulator
       val bcCenters = sc.broadcast(centers)
@@ -345,7 +344,7 @@ class KMeans private (
       cost = costAccum.value
       sc.listenerBus.post(SparkListenerTrace(s"KMeans end iteration=${iteration}"))
       iteration += 1
-    })
+    }
 
     val iterationTimeInSeconds = (System.nanoTime() - iterationStartTime) / 1e9
     logInfo(f"Iterations took $iterationTimeInSeconds%.3f seconds.")
@@ -383,7 +382,6 @@ class KMeans private (
   private[clustering] def initKMeansParallel(data: RDD[VectorWithNorm],
       distanceMeasureInstance: DistanceMeasure): Array[VectorWithNorm] = {
     val sc = data.sparkContext
-    val manageCaching = sc.getConf.get(ITERATION_MANAGE_CACHING)
     sc.listenerBus.post(SparkListenerTrace(s"KMeans_init start"))
 
     // Initialize empty centers and point costs.
@@ -404,24 +402,19 @@ class KMeans private (
     // and new centers are computed in each iteration.
     var step = 0
     val bcNewCentersList = ArrayBuffer[Broadcast[_]]()
-    Macros.whileLoop(data.sparkContext, step < initializationSteps, {
+    while (step < initializationSteps) {
       sc.listenerBus.post(SparkListenerTrace(s"KMeans_init start iteration=${step}"))
       val bcNewCenters = data.context.broadcast(newCenters)
       bcNewCentersList += bcNewCenters
       val preCosts = costs
       costs = data.zip(preCosts).map { case (point, cost) =>
         math.min(distanceMeasureInstance.pointCost(bcNewCenters.value, point), cost)
-      }
-      if (!manageCaching) {
-        costs.persist(StorageLevel.MEMORY_AND_DISK)
-      }
+      }.persist(StorageLevel.MEMORY_AND_DISK)
       val sumCosts = costs.sum()
       sc.listenerBus.post(SparkListenerTrace(s"KMeans_init costs iteration=${step}"))
 
-      if (!manageCaching) {
-        bcNewCenters.unpersist(blocking = false)
-        preCosts.unpersist(blocking = false)
-      }
+      bcNewCenters.unpersist(blocking = false)
+      preCosts.unpersist(blocking = false)
 
       val chosen = data.zip(costs).mapPartitionsWithIndex { (index, pointCosts) =>
         val rand = new XORShiftRandom(seed ^ (step << 16) ^ index)
@@ -431,7 +424,7 @@ class KMeans private (
       centers ++= newCenters
       sc.listenerBus.post(SparkListenerTrace(s"KMeans_init end iteration=${step}"))
       step += 1
-    })
+    }
 
     costs.unpersist(blocking = false)
     bcNewCentersList.foreach(_.destroy(false))
