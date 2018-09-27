@@ -47,7 +47,7 @@ object StronglyConnectedComponents {
     // the graph we update with final SCC ids, and the graph we return at the end
     var sccGraph = graph.mapVertices { case (vid, _) => vid }
     // graph we are going to work with in our iterations
-    var sccWorkGraph = graph.mapVertices { case (vid, _) => (vid, false) }.cache()
+    var sccWorkGraph = graph.mapVertices { case (vid, _) => (vid, false) }
 
     // helper variables to unpersist cached graphs
     var prevSccGraph = sccGraph
@@ -66,7 +66,7 @@ object StronglyConnectedComponents {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
         }.outerJoinVertices(sccWorkGraph.inDegrees) {
           (vid, data, degreeOpt) => if (degreeOpt.isDefined) data else (vid, true)
-        }.cache()
+        }
 
         // get all vertices to be removed
         val finalVertices = sccWorkGraph.vertices
@@ -76,16 +76,11 @@ object StronglyConnectedComponents {
         // write values to sccGraph
         sccGraph = sccGraph.outerJoinVertices(finalVertices) {
           (vid, scc, opt) => opt.getOrElse(scc)
-        }.cache()
-        // materialize vertices and edges
-        sccGraph.vertices.count()
-        sccGraph.edges.count()
-        // sccGraph materialized so, unpersist can be done on previous
-        prevSccGraph.unpersist(blocking = false)
+        }
         prevSccGraph = sccGraph
 
         // only keep vertices that are not final
-        sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2).cache()
+        sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2)
         sparkContext.listenerBus.post(SparkListenerTrace(s"SCC_inner end iteration=${innerIter}"))
       } while (sccWorkGraph.numVertices < numVertices)
 

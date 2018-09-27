@@ -247,12 +247,10 @@ class KMeans private (
 
     // Compute squared norms and cache them.
     val norms = data.map(Vectors.norm(_, 2.0))
-    norms.persist()
     val zippedData = data.zip(norms).map { case (v, norm) =>
       new VectorWithNorm(v, norm)
     }
     val model = runAlgorithm(zippedData, instr)
-    norms.unpersist()
 
     // Warn at the end of the run as well, for increased visibility.
     if (data.getStorageLevel == StorageLevel.NONE) {
@@ -409,12 +407,9 @@ class KMeans private (
       val preCosts = costs
       costs = data.zip(preCosts).map { case (point, cost) =>
         math.min(distanceMeasureInstance.pointCost(bcNewCenters.value, point), cost)
-      }.persist(StorageLevel.MEMORY_AND_DISK)
+      }
       val sumCosts = costs.sum()
       sc.listenerBus.post(SparkListenerTrace(s"KMeans_init costs iteration=${step}"))
-
-      bcNewCenters.unpersist(blocking = false)
-      preCosts.unpersist(blocking = false)
 
       val chosen = data.zip(costs).mapPartitionsWithIndex { (index, pointCosts) =>
         val rand = new XORShiftRandom(seed ^ (step << 16) ^ index)
@@ -426,7 +421,6 @@ class KMeans private (
       step += 1
     }
 
-    costs.unpersist(blocking = false)
     bcNewCentersList.foreach(_.destroy(false))
 
     val distinctCenters = centers.map(_.vector).distinct.map(new VectorWithNorm(_))

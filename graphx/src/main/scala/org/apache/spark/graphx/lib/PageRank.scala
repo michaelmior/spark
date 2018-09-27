@@ -135,7 +135,6 @@ object PageRank extends Logging {
     var iteration = 0
     var prevRankGraph: Graph[Double, Double] = null
     while (iteration < numIter) {
-      rankGraph.cache()
       graph.vertices.sparkContext.listenerBus.post(
         SparkListenerTrace(s"PageRank start iteration=${iteration}"))
 
@@ -156,12 +155,9 @@ object PageRank extends Logging {
 
       rankGraph = rankGraph.outerJoinVertices(rankUpdates) {
         (id, oldRank, msgSumOpt) => rPrb(src, id) + (1.0 - resetProb) * msgSumOpt.getOrElse(0.0)
-      }.cache()
+      }
 
-      rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
       logInfo(s"PageRank finished iteration $iteration.")
-      prevRankGraph.vertices.unpersist(false)
-      prevRankGraph.edges.unpersist(false)
 
       graph.vertices.sparkContext.listenerBus.post(
         SparkListenerTrace(s"PageRank end iteration=${iteration}"))
@@ -248,11 +244,7 @@ object PageRank extends Logging {
             zero
           }
           popActivations +:+ resetActivations
-        }.cache()
-
-      rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
-      prevRankGraph.vertices.unpersist(false)
-      prevRankGraph.edges.unpersist(false)
+        }
 
       logInfo(s"Parallel Personalized PageRank finished iteration $i.")
 
@@ -325,7 +317,6 @@ object PageRank extends Logging {
       .mapVertices { (id, attr) =>
         if (id == src) (0.0, Double.NegativeInfinity) else (0.0, 0.0)
       }
-      .cache()
 
     // Define the three functions needed to implement PageRank in the GraphX
     // version of Pregel
