@@ -50,10 +50,9 @@ class CartesianRDD[T: ClassTag, U: ClassTag](
     sc: SparkContext,
     var rdd1 : RDD[T],
     var rdd2 : RDD[U])
-  extends RDD[(T, U)](sc, Nil)
-  with Serializable {
-
-  val numPartitionsInRdd2 = rdd2.partitions.length
+  extends {
+    val numPartitionsInRdd2 = rdd2.partitions.length
+  } with RDD[(T, U)](sc, Nil) with Serializable {
 
   override def getPartitions: Array[Partition] = {
     // create the cross product split

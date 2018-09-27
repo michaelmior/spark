@@ -67,7 +67,8 @@ object UnionRDD {
 class UnionRDD[T: ClassTag](
     sc: SparkContext,
     var rdds: Seq[RDD[T]])
-  extends RDD[T](sc, Nil) {  // Nil since we implement getDependencies
+  extends {
+  } with RDD[T](sc, Nil) {  // Nil since we implement getDependencies
 
   // visible for testing
   private[spark] val isPartitionListingParallel: Boolean =
