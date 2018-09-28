@@ -19,8 +19,10 @@ package org.apache.spark.graphx
 
 import scala.reflect.ClassTag
 
+import org.apache.spark.graphx.util.PeriodicGraphCheckpointer
 import org.apache.spark.internal.Logging
 import org.apache.spark.rdd.RDD
+import org.apache.spark.rdd.util.PeriodicRDDCheckpointer
 import org.apache.spark.scheduler.SparkListenerTrace
 
 /**
@@ -125,10 +127,18 @@ object Pregel extends Logging {
       s" but got ${maxIterations}")
 
     graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel start"))
+    val checkpointInterval = graph.vertices.sparkContext.getConf
+      .getInt("spark.graphx.pregel.checkpointInterval", -1)
     var g = graph.mapVertices((vid, vdata) => vprog(vid, vdata, initialMsg))
+    val graphCheckpointer = new PeriodicGraphCheckpointer[VD, ED](
+      checkpointInterval, graph.vertices.sparkContext)
+    graphCheckpointer.update(g)
 
     // compute the messages
     var messages = GraphXUtils.mapReduceTriplets(g, sendMsg, mergeMsg)
+    val messageCheckpointer = new PeriodicRDDCheckpointer[(VertexId, A)](
+      checkpointInterval, graph.vertices.sparkContext)
+    messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
     var activeMessages = messages.count()
 
     // Loop
@@ -140,6 +150,7 @@ object Pregel extends Logging {
       // Receive the messages and update the vertices.
       prevG = g
       g = g.joinVertices(messages)(vprog)
+      graphCheckpointer.update(g)
 
       val oldMessages = messages
       // Send new messages, skipping edges where neither side received a message. We must cache
@@ -150,6 +161,7 @@ object Pregel extends Logging {
       // The call to count() materializes `messages` and the vertices of `g`. This hides oldMessages
       // (depended on by the vertices of g) and the vertices of prevG (depended on by oldMessages
       // and the vertices of g).
+      messageCheckpointer.update(messages.asInstanceOf[RDD[(VertexId, A)]])
       activeMessages = messages.count()
 
       logInfo("Pregel finished iteration " + i)
@@ -158,6 +170,8 @@ object Pregel extends Logging {
       graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel end iteration=${i}"))
       i += 1
     }
+    graphCheckpointer.deleteAllCheckpoints()
+    messageCheckpointer.deleteAllCheckpoints()
 
     graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"Pregel end"))
     g

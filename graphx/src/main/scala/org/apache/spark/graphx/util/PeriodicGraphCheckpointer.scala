@@ -86,19 +86,9 @@ private[spark] class PeriodicGraphCheckpointer[VD, ED](
 
   override protected def isCheckpointed(data: Graph[VD, ED]): Boolean = data.isCheckpointed
 
-  override protected def persist(data: Graph[VD, ED]): Unit = {
-    if (data.vertices.getStorageLevel == StorageLevel.NONE) {
-      /* We need to use cache because persist does not honor the default storage level requested
-       * when constructing the graph. Only cache does that.
-       */
-      data.vertices.cache()
-    }
-    if (data.edges.getStorageLevel == StorageLevel.NONE) {
-      data.edges.cache()
-    }
-  }
+  override protected def persist(data: Graph[VD, ED]): Unit = {}
 
-  override protected def unpersist(data: Graph[VD, ED]): Unit = data.unpersist(blocking = false)
+  override protected def unpersist(data: Graph[VD, ED]): Unit = {}
 
   override protected def getCheckpointFiles(data: Graph[VD, ED]): Iterable[String] = {
     data.getCheckpointFiles
