@@ -140,6 +140,7 @@ class JavaSparkContext(val sc: SparkContext)
     JavaRDD.fromRDD(new EmptyRDD[T](sc))
   }
 
+
   /** Distribute a local Scala collection to form an RDD. */
   def parallelize[T](list: java.util.List[T]): JavaRDD[T] =
     parallelize(list, sc.defaultParallelism)

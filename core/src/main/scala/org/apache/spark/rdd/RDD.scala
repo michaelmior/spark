@@ -75,7 +75,7 @@ import org.apache.spark.util.random.{BernoulliCellSampler, BernoulliSampler, Poi
  * for more details on RDD internals.
  */
 abstract class RDD[T: ClassTag](
-    @transient private[spark] var _sc: SparkContext,
+    @transient private var _sc: SparkContext,
     @transient private var deps: Seq[Dependency[_]]
   ) extends Serializable with Logging {
 

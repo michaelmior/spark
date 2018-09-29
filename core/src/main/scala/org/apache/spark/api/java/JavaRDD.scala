@@ -25,15 +25,12 @@ import org.apache.spark.api.java.JavaSparkContext.fakeClassTag
 import org.apache.spark.api.java.function.{Function => JFunction}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.storage.StorageLevel
-import org.apache.spark.util.CallSite
 import org.apache.spark.util.Utils
 
-class JavaRDD[T](
-    val rdd: RDD[T],
-    val stackTrace: Option[String] = None)(implicit val classTag: ClassTag[T])
+class JavaRDD[T](val rdd: RDD[T])(implicit val classTag: ClassTag[T])
   extends AbstractJavaRDDLike[T, JavaRDD[T]] {
 
-  override def wrapRDD(rdd: RDD[T]): JavaRDD[T] = JavaRDD.fromRDD(rdd, stackTrace)
+  override def wrapRDD(rdd: RDD[T]): JavaRDD[T] = JavaRDD.fromRDD(rdd)
 
   // Common RDD functions
 
@@ -209,16 +206,11 @@ class JavaRDD[T](
     wrapRDD(rdd.sortBy(fn, ascending, numPartitions))
   }
 
-  rdd.extraStack = stackTrace
 }
 
 object JavaRDD {
 
-  implicit def fromRDD[T: ClassTag](rdd: RDD[T]): JavaRDD[T] = new JavaRDD[T](rdd, None)
-
-  implicit def fromRDD[T: ClassTag](
-      rdd: RDD[T],
-      stackTrace: Option[String] = None): JavaRDD[T] = new JavaRDD[T](rdd, stackTrace)
+  implicit def fromRDD[T: ClassTag](rdd: RDD[T]): JavaRDD[T] = new JavaRDD[T](rdd)
 
   implicit def toRDD[T](rdd: JavaRDD[T]): RDD[T] = rdd.rdd
 }
