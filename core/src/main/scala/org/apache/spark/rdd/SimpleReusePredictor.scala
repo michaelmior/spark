@@ -43,6 +43,7 @@ class SimpleReusePredictor extends RDDUsePredictor {
     rdd.reuseCount = Some(reuses)
     if (reuses > 1) {
       rdd.implicitPersist()
+      rdd.lazyUnpersist(Some(reuses))
     }
   }
 

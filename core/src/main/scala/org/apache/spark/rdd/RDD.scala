@@ -203,7 +203,7 @@ abstract class RDD[T: ClassTag](
     }
 
     // TODO: Handle changes of StorageLevel
-    if (storageLevel != StorageLevel.NONE && newLevel != storageLevel && !allowOverride && !implicitlyPersisted) {
+    if (storageLevel != StorageLevel.NONE && newLevel != storageLevel && !allowOverride) {
       throw new UnsupportedOperationException(
         "Cannot change storage level of an RDD after it was already assigned a level")
     }
