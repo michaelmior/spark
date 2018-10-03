@@ -109,6 +109,8 @@ class CoGroupedRDD[K: ClassTag](
     }
   }
 
+  override def getParentRdds: Seq[RDD[_]] = rdds
+
   override def getPartitions: Array[Partition] = {
     val array = new Array[Partition](part.numPartitions)
     for (i <- 0 until array.length) {

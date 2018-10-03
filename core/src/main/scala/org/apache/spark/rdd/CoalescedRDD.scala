@@ -108,6 +108,8 @@ private[spark] class CoalescedRDD[T: ClassTag](
     })
   }
 
+  override def getParentRdds: Seq[RDD[_]] = Seq(prev)
+
   override def clearDependencies() {
     super.clearDependencies()
     prev = null

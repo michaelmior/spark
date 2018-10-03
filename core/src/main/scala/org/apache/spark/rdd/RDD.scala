@@ -131,6 +131,8 @@ abstract class RDD[T: ClassTag](
    */
   protected def getDependencies: Seq[Dependency[_]] = deps
 
+  private[spark] def getParentRdds: Seq[RDD[_]] = deps.map(_.rdd)
+
   /**
    * Optionally overridden by subclasses to specify placement preferences.
    */

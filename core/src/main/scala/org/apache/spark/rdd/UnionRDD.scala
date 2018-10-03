@@ -100,6 +100,8 @@ class UnionRDD[T: ClassTag](
     deps
   }
 
+  override def getParentRdds: Seq[RDD[_]] = rdds
+
   override def compute(s: Partition, context: TaskContext): Iterator[T] = {
     val part = s.asInstanceOf[UnionPartition[T]]
     parent[T](part.parentRddIndex).iterator(part.parentPartition, context)

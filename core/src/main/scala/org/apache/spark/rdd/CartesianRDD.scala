@@ -85,6 +85,8 @@ class CartesianRDD[T: ClassTag, U: ClassTag](
     }
   )
 
+  override def getParentRdds: Seq[RDD[_]] = Seq(rdd1, rdd2)
+
   override def clearDependencies() {
     super.clearDependencies()
     rdd1 = null

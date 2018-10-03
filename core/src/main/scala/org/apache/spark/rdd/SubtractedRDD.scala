@@ -68,6 +68,8 @@ private[spark] class SubtractedRDD[K: ClassTag, V: ClassTag, W: ClassTag](
     Seq(rddDependency[K, V](rdd1), rddDependency[K, W](rdd2))
   }
 
+  override def getParentRdds: Seq[RDD[_]] = Seq(rdd1, rdd2)
+
   override def getPartitions: Array[Partition] = {
     val array = new Array[Partition](part.numPartitions)
     for (i <- 0 until array.length) {
