@@ -79,9 +79,7 @@ private[spark] class CoGroupPartition(
 class CoGroupedRDD[K: ClassTag](
     @transient var rdds: Seq[RDD[_ <: Product2[K, _]]],
     part: Partitioner)
-  extends {
-    private var serializer: Serializer = SparkEnv.get.serializer
-  } with RDD[(K, Array[Iterable[_]])](rdds.head.context, Nil) {
+  extends RDD[(K, Array[Iterable[_]])](rdds.head.context, Nil) {
 
   // For example, `(k, a) cogroup (k, b)` produces k -> Array(ArrayBuffer as, ArrayBuffer bs).
   // Each ArrayBuffer is represented as a CoGroup, and the resulting Array as a CoGroupCombiner.
@@ -89,6 +87,8 @@ class CoGroupedRDD[K: ClassTag](
   private type CoGroup = CompactBuffer[Any]
   private type CoGroupValue = (Any, Int)  // Int is dependency number
   private type CoGroupCombiner = Array[CoGroup]
+
+  private var serializer: Serializer = SparkEnv.get.serializer
 
   /** Set a serializer for this RDD's shuffle, or null to use the default (spark.serializer) */
   def setSerializer(serializer: Serializer): CoGroupedRDD[K] = {

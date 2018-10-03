@@ -41,15 +41,15 @@ private[spark] class ShuffledRDDPartition(val idx: Int) extends Partition {
 class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
     @transient var prev: RDD[_ <: Product2[K, V]],
     part: Partitioner)
-  extends {
-    private var userSpecifiedSerializer: Option[Serializer] = None
+  extends RDD[(K, C)](prev.context, Nil) {
 
-    private var mapSideCombine: Boolean = false
+  private var userSpecifiedSerializer: Option[Serializer] = None
 
-    private var keyOrdering: Option[Ordering[K]] = None
+  private var keyOrdering: Option[Ordering[K]] = None
 
-    private var aggregator: Option[Aggregator[K, V, C]] = None
-  } with RDD[(K, C)](prev.context, Nil) {
+  private var aggregator: Option[Aggregator[K, V, C]] = None
+
+  private var mapSideCombine: Boolean = false
 
   /** Set a serializer for this RDD's shuffle, or null to use the default (spark.serializer) */
   def setSerializer(serializer: Serializer): ShuffledRDD[K, V, C] = {
