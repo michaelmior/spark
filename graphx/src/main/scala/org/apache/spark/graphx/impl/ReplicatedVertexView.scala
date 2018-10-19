@@ -61,6 +61,8 @@ class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
   def upgrade(vertices: VertexRDD[VD], includeSrc: Boolean, includeDst: Boolean) {
     val shipSrc = includeSrc && !hasSrcId
     val shipDst = includeDst && !hasDstId
+    edges.partitionsRDD.stopTrackingUse()
+    edges.stopTrackingUse()
     if (shipSrc || shipDst) {
       val shippedVerts: RDD[(Int, VertexAttributeBlock[VD])] =
         vertices.shipVertexAttributes(shipSrc, shipDst)
@@ -73,6 +75,8 @@ class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
             (pid, edgePartition.updateVertices(shippedVertsIter.flatMap(_._2.iterator)))
         }
       })
+      edges.partitionsRDD.resumeTrackingUse()
+      edges.resumeTrackingUse()
       edges = newEdges
       hasSrcId = includeSrc
       hasDstId = includeDst

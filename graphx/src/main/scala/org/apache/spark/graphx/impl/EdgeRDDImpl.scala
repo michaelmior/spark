@@ -133,7 +133,10 @@ class EdgeRDDImpl[ED: ClassTag, VD: ClassTag] private[graphx] (
 
   private[graphx] def withPartitionsRDD[ED2: ClassTag, VD2: ClassTag](
       partitionsRDD: RDD[(PartitionID, EdgePartition[ED2, VD2])]): EdgeRDDImpl[ED2, VD2] = {
-    new EdgeRDDImpl(partitionsRDD, this.targetStorageLevel)
+    partitionsRDD.stopTrackingUse()
+    val newRdd = new EdgeRDDImpl(partitionsRDD, this.targetStorageLevel)
+    partitionsRDD.resumeTrackingUse()
+    newRdd
   }
 
   override private[graphx] def withTargetStorageLevel(
