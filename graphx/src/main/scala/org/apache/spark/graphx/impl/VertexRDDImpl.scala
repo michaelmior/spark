@@ -244,7 +244,10 @@ class VertexRDDImpl[VD] private[graphx] (
 
   override private[graphx] def withTargetStorageLevel(
       targetStorageLevel: StorageLevel): VertexRDD[VD] = {
-    new VertexRDDImpl(this.partitionsRDD, targetStorageLevel)
+    partitionsRDD.stopTrackingUse()
+    val newRdd = new VertexRDDImpl(this.partitionsRDD, targetStorageLevel)
+    partitionsRDD.resumeTrackingUse()
+    newRdd
   }
 
   override private[graphx] def shipVertexAttributes(
