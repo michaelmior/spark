@@ -252,11 +252,17 @@ class VertexRDDImpl[VD] private[graphx] (
 
   override private[graphx] def shipVertexAttributes(
       shipSrc: Boolean, shipDst: Boolean): RDD[(PartitionID, VertexAttributeBlock[VD])] = {
-    partitionsRDD.mapPartitions(_.flatMap(_.shipVertexAttributes(shipSrc, shipDst)))
+    partitionsRDD.stopTrackingUse()
+    val newRdd = partitionsRDD.mapPartitions(_.flatMap(_.shipVertexAttributes(shipSrc, shipDst)))
+    partitionsRDD.resumeTrackingUse()
+    newRdd
   }
 
   override private[graphx] def shipVertexIds(): RDD[(PartitionID, Array[VertexId])] = {
-    partitionsRDD.mapPartitions(_.flatMap(_.shipVertexIds()))
+    partitionsRDD.stopTrackingUse()
+    val newRdd = partitionsRDD.mapPartitions(_.flatMap(_.shipVertexIds()))
+    partitionsRDD.resumeTrackingUse()
+    newRdd
   }
 
 }
