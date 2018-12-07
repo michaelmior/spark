@@ -2484,7 +2484,9 @@ class PipelinedRDD(RDD):
         return self._id
 
     def _is_pipelinable(self):
-        return not (self.is_cached or self.is_checkpointed)
+        # return not (self.is_cached or self.is_checkpointed)
+        # XXX Pipelining breaks automatic caching
+        return False
 
 
 def _test():
