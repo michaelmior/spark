@@ -114,7 +114,9 @@ object PageRank extends Logging {
 
     val personalized = srcId.isDefined
     val src: VertexId = srcId.getOrElse(-1L)
-    graph.vertices.sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start"))
+    val sparkContext = graph.vertices.sparkContext
+    val materialize = sparkContext.conf.getBoolean("spark.iteration.materialize", false)
+    sparkContext.listenerBus.post(SparkListenerTrace(s"PageRank start"))
 
     // Initialize the PageRank graph with each edge attribute having
     // weight 1/outDegree and each vertex with attribute 1.0.
@@ -157,6 +159,9 @@ object PageRank extends Logging {
         (id, oldRank, msgSumOpt) => rPrb(src, id) + (1.0 - resetProb) * msgSumOpt.getOrElse(0.0)
       }
 
+      if (materialize) {
+        rankGraph.edges.foreachPartition(x => {}) // also materializes rankGraph.vertices
+      }
       logInfo(s"PageRank finished iteration $iteration.")
 
       graph.vertices.sparkContext.listenerBus.post(

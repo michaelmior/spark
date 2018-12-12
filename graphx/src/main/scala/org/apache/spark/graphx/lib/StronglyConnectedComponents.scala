@@ -42,6 +42,7 @@ object StronglyConnectedComponents {
       s" but got ${numIter}")
 
     val sparkContext = graph.vertices.sparkContext
+    val materialize = sparkContext.conf.getBoolean("spark.iteration.materialize", false)
     sparkContext.listenerBus.post(SparkListenerTrace(s"SCC start"))
 
     // the graph we update with final SCC ids, and the graph we return at the end
@@ -77,7 +78,12 @@ object StronglyConnectedComponents {
         sccGraph = sccGraph.outerJoinVertices(finalVertices) {
           (vid, scc, opt) => opt.getOrElse(scc)
         }
-        prevSccGraph = sccGraph
+        if (materialize) {
+          // materialize vertices and edges
+          sccGraph.vertices.count()
+          sccGraph.edges.count()
+          prevSccGraph = sccGraph
+        }
 
         // only keep vertices that are not final
         sccWorkGraph = sccWorkGraph.subgraph(vpred = (vid, data) => !data._2)
