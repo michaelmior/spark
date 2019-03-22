@@ -888,6 +888,10 @@ class DAGScheduler(
     val stageAttemptId =
       stageIdToStage.get(task.stageId).map(_.latestInfo.attemptNumber).getOrElse(-1)
     listenerBus.post(SparkListenerTaskStart(task.stageId, stageAttemptId, taskInfo))
+
+    waitingUnpersistRdds.getOrElse(task.stageId, Set.empty).foreach { rdd =>
+      rdd.setPreferredLocation(task.partitionId, TaskLocation(taskInfo.host, taskInfo.executorId))
+    }
   }
 
   private[scheduler] def handleSpeculativeTaskSubmitted(task: Task[_]): Unit = {

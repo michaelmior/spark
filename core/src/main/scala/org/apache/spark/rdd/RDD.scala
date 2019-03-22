@@ -40,6 +40,7 @@ import org.apache.spark.partial.BoundedDouble
 import org.apache.spark.partial.CountEvaluator
 import org.apache.spark.partial.GroupedCountEvaluator
 import org.apache.spark.partial.PartialResult
+import org.apache.spark.scheduler.TaskLocation
 import org.apache.spark.storage.{RDDBlockId, StorageLevel}
 import org.apache.spark.util.{BoundedPriorityQueue, CallSite, Utils}
 import org.apache.spark.util.collection.{OpenHashMap, Utils => collectionUtils}
@@ -177,6 +178,8 @@ abstract class RDD[T: ClassTag](
 
   /** A friendly name for this RDD */
   @transient var name: String = _
+
+  @transient var preferredLocations: mutable.Map[Int, TaskLocation] = mutable.Map.empty
 
   /** Assign a name to this RDD */
   def setName(_name: String): this.type = {
@@ -342,9 +345,15 @@ abstract class RDD[T: ClassTag](
    * RDD is checkpointed.
    */
   final def preferredLocations(split: Partition): Seq[String] = {
-    checkpointRDD.map(_.getPreferredLocations(split)).getOrElse {
+    checkpointRDD.map(_.getPreferredLocations(split)).orElse {
+      preferredLocations.get(split.index).map(l => Seq(l.toString))
+    }.getOrElse {
       getPreferredLocations(split)
     }
+  }
+
+  final def setPreferredLocation(partitionIndex: Int, location: TaskLocation): Unit = {
+    preferredLocations(partitionIndex) = location
   }
 
   /**
