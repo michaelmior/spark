@@ -2354,9 +2354,7 @@ class SparkContext(config: SparkConf) extends Logging {
     val rddId = nextRddId.getAndIncrement()
     rdd.id = rddId
     rdd.getParentRdds.foreach { parent =>
-      if (parent.isTrackingUse()) {
-        usePredictor.trackUse(parent, rdd)
-      }
+      usePredictor.trackUse(parent, rdd)
     }
     if (isImplicitPersistEnabled && usePredictor.predictReuse(rdd)) {
       rdd.implicitPersist()

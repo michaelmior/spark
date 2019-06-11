@@ -49,11 +49,8 @@ class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
    * match.
    */
   def reverse(): ReplicatedVertexView[VD, ED] = {
-    edges.partitionsRDD.stopTrackingUse()
     val newEdges = edges.mapEdgePartitions((pid, part) => part.reverse)
-    val newRdd = new ReplicatedVertexView(newEdges, hasDstId, hasSrcId)
-    edges.partitionsRDD.resumeTrackingUse()
-    newRdd
+    new ReplicatedVertexView(newEdges, hasDstId, hasSrcId)
   }
 
   /**
@@ -92,16 +89,13 @@ class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
       .setName("ReplicatedVertexView.withActiveSet - shippedActives (broadcast)")
       .partitionBy(edges.partitioner.get)
 
-    edges.partitionsRDD.stopTrackingUse()
     val newEdges = edges.withPartitionsRDD(edges.partitionsRDD.zipPartitions(shippedActives) {
       (ePartIter, shippedActivesIter) => ePartIter.map {
         case (pid, edgePartition) =>
           (pid, edgePartition.withActiveSet(shippedActivesIter.flatMap(_._2.iterator)))
       }
     })
-    val newRdd = new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
-    edges.partitionsRDD.resumeTrackingUse()
-    newRdd
+    new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
   }
 
   /**
@@ -115,15 +109,12 @@ class ReplicatedVertexView[VD: ClassTag, ED: ClassTag](
         hasSrcId, hasDstId))
       .partitionBy(edges.partitioner.get)
 
-    edges.partitionsRDD.stopTrackingUse()
     val newEdges = edges.withPartitionsRDD(edges.partitionsRDD.zipPartitions(shippedVerts) {
       (ePartIter, shippedVertsIter) => ePartIter.map {
         case (pid, edgePartition) =>
           (pid, edgePartition.updateVertices(shippedVertsIter.flatMap(_._2.iterator)))
       }
     })
-    val newRdd = new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
-    edges.partitionsRDD.resumeTrackingUse()
-    newRdd
+    new ReplicatedVertexView(newEdges, hasSrcId, hasDstId)
   }
 }

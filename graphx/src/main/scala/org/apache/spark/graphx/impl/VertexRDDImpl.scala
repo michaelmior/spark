@@ -244,25 +244,16 @@ class VertexRDDImpl[VD] private[graphx] (
 
   override private[graphx] def withTargetStorageLevel(
       targetStorageLevel: StorageLevel): VertexRDD[VD] = {
-    partitionsRDD.stopTrackingUse()
-    val newRdd = new VertexRDDImpl(this.partitionsRDD, targetStorageLevel)
-    partitionsRDD.resumeTrackingUse()
-    newRdd
+    new VertexRDDImpl(this.partitionsRDD, targetStorageLevel)
   }
 
   override private[graphx] def shipVertexAttributes(
       shipSrc: Boolean, shipDst: Boolean): RDD[(PartitionID, VertexAttributeBlock[VD])] = {
-    partitionsRDD.stopTrackingUse()
-    val newRdd = partitionsRDD.mapPartitions(_.flatMap(_.shipVertexAttributes(shipSrc, shipDst)))
-    partitionsRDD.resumeTrackingUse()
-    newRdd
+    partitionsRDD.mapPartitions(_.flatMap(_.shipVertexAttributes(shipSrc, shipDst)))
   }
 
   override private[graphx] def shipVertexIds(): RDD[(PartitionID, Array[VertexId])] = {
-    partitionsRDD.stopTrackingUse()
-    val newRdd = partitionsRDD.mapPartitions(_.flatMap(_.shipVertexIds()))
-    partitionsRDD.resumeTrackingUse()
-    newRdd
+    partitionsRDD.mapPartitions(_.flatMap(_.shipVertexIds()))
   }
 
 }

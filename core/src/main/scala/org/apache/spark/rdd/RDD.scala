@@ -169,7 +169,6 @@ abstract class RDD[T: ClassTag](
   private var storageLevel: StorageLevel = StorageLevel.NONE
   private[spark] var implicitlyPersisted: Boolean = false
 
-  private var trackReuse: Boolean = true
   private var pendingUnpersist: Boolean = false
   private[spark] var reuseCount: Option[Int] = None
 
@@ -185,18 +184,6 @@ abstract class RDD[T: ClassTag](
   def setName(_name: String): this.type = {
     name = _name
     this
-  }
-
-  private[spark] def stopTrackingUse(): Unit = {
-    trackReuse = false
-  }
-
-  private[spark] def resumeTrackingUse(): Unit = {
-    trackReuse = true
-  }
-
-  private[spark] def isTrackingUse(): Boolean = {
-    trackReuse
   }
 
   private[spark] def implicitPersist(
