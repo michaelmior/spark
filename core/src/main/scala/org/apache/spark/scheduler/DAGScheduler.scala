@@ -193,6 +193,8 @@ class DAGScheduler(
   /** If enabled, FetchFailed will not cause stage retry, in order to surface the problem. */
   private val disallowStageRetryForTest = sc.getConf.getBoolean("spark.test.noStageRetry", false)
 
+  private val enableLazyUnpersist = sc.getConf.getBoolean("spark.lazyUnpersist.enabled", true)
+
   /**
    * Whether to unregister all the outputs on the host in condition that we receive a FetchFailure,
    * this is set default to false, which means, we only unregister the outputs related to the exact
@@ -1620,7 +1622,9 @@ class DAGScheduler(
       logInfo("%s (%s) finished in %s s".format(stage, stage.name, serviceTime))
       stage.latestInfo.completionTime = Some(clock.getTimeMillis())
 
-      checkPendingUnpersist(stage)
+      if (enableLazyUnpersist) {
+        checkPendingUnpersist(stage)
+      }
 
       // Clear failure count for this stage, now that it's succeeded.
       // We only limit consecutive failures of stage attempts,so that if a stage is
