@@ -232,6 +232,7 @@ class SparkContext(config: SparkConf) extends Logging {
   def deployMode: String = _conf.getOption("spark.submit.deployMode").getOrElse("client")
   def appName: String = _conf.get("spark.app.name")
 
+  private[spark] def trackReuse: Boolean = _conf.getBoolean("spark.useTracking.enabled", true)
   private[spark] def isEventLogEnabled: Boolean = _conf.getBoolean("spark.eventLog.enabled", false)
   private[spark] def eventLogDir: Option[URI] = _eventLogDir
   private[spark] def eventLogCodec: Option[String] = _eventLogCodec
@@ -2025,7 +2026,11 @@ class SparkContext(config: SparkConf) extends Logging {
       throw new IllegalStateException("SparkContext has been shutdown")
     }
     val callSite = getCallSite
-    usePredictor.trackAction(rdd, callSite)
+
+    if (trackReuse) {
+      usePredictor.trackAction(rdd, callSite)
+    }
+
     val cleanedFunc = clean(func)
     logInfo("Starting job: " + callSite.shortForm)
     if (conf.getBoolean("spark.logLineage", false)) {
@@ -2150,7 +2155,11 @@ class SparkContext(config: SparkConf) extends Logging {
       timeout: Long): PartialResult[R] = {
     assertNotStopped()
     val callSite = getCallSite
-    usePredictor.trackAction(rdd, callSite)
+
+    if (trackReuse) {
+      usePredictor.trackAction(rdd, callSite)
+    }
+
     logInfo("Starting job: " + callSite.shortForm)
     val start = System.nanoTime
     val cleanedFunc = clean(func)
@@ -2181,7 +2190,11 @@ class SparkContext(config: SparkConf) extends Logging {
     assertNotStopped()
     val cleanF = clean(processPartition)
     val callSite = getCallSite
-    usePredictor.trackAction(rdd, callSite)
+
+    if (trackReuse) {
+      usePredictor.trackAction(rdd, callSite)
+    }
+
     val waiter = dagScheduler.submitJob(
       rdd,
       (context: TaskContext, iter: Iterator[T]) => cleanF(iter),
@@ -2353,12 +2366,16 @@ class SparkContext(config: SparkConf) extends Logging {
   private[spark] def registerRdd(rdd: RDD[_]): Int = {
     val rddId = nextRddId.getAndIncrement()
     rdd.id = rddId
-    rdd.getParentRdds.foreach { parent =>
-      usePredictor.trackUse(parent, rdd)
+
+    if (trackReuse) {
+      rdd.getParentRdds.foreach { parent =>
+        usePredictor.trackUse(parent, rdd)
+      }
+      if (isImplicitPersistEnabled && usePredictor.predictReuse(rdd)) {
+        rdd.implicitPersist()
+      }
     }
-    if (isImplicitPersistEnabled && usePredictor.predictReuse(rdd)) {
-      rdd.implicitPersist()
-    }
+
     rddId
   }
 
