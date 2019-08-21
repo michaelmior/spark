@@ -187,7 +187,7 @@ abstract class RDD[T: ClassTag](
   }
 
   private[spark] def implicitPersist(
-      newLevel: StorageLevel = StorageLevel.MEMORY_AND_DISK): this.type = {
+      newLevel: StorageLevel = StorageLevel.MEMORY_ONLY): this.type = {
     if (storageLevel != StorageLevel.NONE) {
       return this
     }
