@@ -71,14 +71,11 @@ object SVDPlusPlus {
     }
 
     // calculate global rating mean
-    edges.cache()
     val (rs, rc) = edges.map(e => (e.attr, 1L)).reduce((a, b) => (a._1 + b._1, a._2 + b._2))
     val u = rs / rc
 
     // construct graph
-    var g = Graph.fromEdges(edges, defaultF(conf.rank)).cache()
-    materialize(g)
-    edges.unpersist()
+    var g = Graph.fromEdges(edges, defaultF(conf.rank))
 
     // Calculate initial bias and norm
     val t0 = g.aggregateMessages[(Long, Double)](
@@ -89,9 +86,7 @@ object SVDPlusPlus {
       (vid: VertexId, vd: (Array[Double], Array[Double], Double, Double),
        msg: Option[(Long, Double)]) =>
         (vd._1, vd._2, msg.get._2 / msg.get._1 - u, 1.0 / scala.math.sqrt(msg.get._1))
-    }.cache()
-    materialize(gJoinT0)
-    g.unpersist()
+    }
     g = gJoinT0
 
     def sendMsgTrainF(conf: Conf, u: Double)
@@ -124,7 +119,6 @@ object SVDPlusPlus {
 
     for (i <- 0 until conf.maxIters) {
       // Phase 1, calculate pu + |N(u)|^(-0.5)*sum(y) for user nodes
-      g.cache()
       val t1 = g.aggregateMessages[Array[Double]](
         ctx => ctx.sendToSrc(ctx.dstAttr._2),
         (g1, g2) => {
@@ -142,13 +136,10 @@ object SVDPlusPlus {
           } else {
             vd
           }
-      }.cache()
-      materialize(gJoinT1)
-      g.unpersist()
+      }
       g = gJoinT1
 
       // Phase 2, update p for user nodes and q, y for item nodes
-      g.cache()
       val t2 = g.aggregateMessages(
         sendMsgTrainF(conf, u),
         (g1: (Array[Double], Array[Double], Double), g2: (Array[Double], Array[Double], Double)) =>
@@ -169,9 +160,7 @@ object SVDPlusPlus {
           blas.daxpy(out2.length, 1.0, msg.get._2, 1, out2, 1)
           (out1, out2, vd._3 + msg.get._3, vd._4)
         }
-      }.cache()
-      materialize(gJoinT2)
-      g.unpersist()
+      }
       g = gJoinT2
     }
 
@@ -187,27 +176,15 @@ object SVDPlusPlus {
       ctx.sendToDst(err)
     }
 
-    g.cache()
     val t3 = g.aggregateMessages[Double](sendMsgTestF(conf, u), _ + _)
     val gJoinT3 = g.outerJoinVertices(t3) {
       (vid: VertexId, vd: (Array[Double], Array[Double], Double, Double), msg: Option[Double]) =>
         if (msg.isDefined) (vd._1, vd._2, vd._3, msg.get) else vd
-    }.cache()
-    materialize(gJoinT3)
-    g.unpersist()
+    }
     g = gJoinT3
 
     // Convert DoubleMatrix to Array[Double]:
     val newVertices = g.vertices.mapValues(v => (v._1.toArray, v._2.toArray, v._3, v._4))
     (Graph(newVertices, g.edges), u)
   }
-
-  /**
-   * Forces materialization of a Graph by count()ing its RDDs.
-   */
-  private def materialize(g: Graph[_, _]): Unit = {
-    g.vertices.count()
-    g.edges.count()
-  }
-
 }
