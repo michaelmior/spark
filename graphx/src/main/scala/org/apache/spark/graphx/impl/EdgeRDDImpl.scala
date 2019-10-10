@@ -136,9 +136,4 @@ class EdgeRDDImpl[ED: ClassTag, VD: ClassTag] private[graphx] (
     new EdgeRDDImpl(partitionsRDD, this.targetStorageLevel)
   }
 
-  override private[graphx] def withTargetStorageLevel(
-      targetStorageLevel: StorageLevel): EdgeRDDImpl[ED, VD] = {
-    new EdgeRDDImpl(this.partitionsRDD, targetStorageLevel)
-  }
-
 }

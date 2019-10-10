@@ -239,16 +239,6 @@ abstract class VertexRDD[VD](
   private[graphx] def withPartitionsRDD[VD2: ClassTag](
       partitionsRDD: RDD[ShippableVertexPartition[VD2]]): VertexRDD[VD2]
 
-  /**
-   * Changes the target storage level while preserving all other properties of the
-   * VertexRDD. Operations on the returned VertexRDD will preserve this storage level.
-   *
-   * This does not actually trigger a cache; to do this, call
-   * [[org.apache.spark.graphx.VertexRDD#cache]] on the returned VertexRDD.
-   */
-  private[graphx] def withTargetStorageLevel(
-      targetStorageLevel: StorageLevel): VertexRDD[VD]
-
   /** Generates an RDD of vertex attributes suitable for shipping to the edge partitions. */
   private[graphx] def shipVertexAttributes(
       shipSrc: Boolean, shipDst: Boolean): RDD[(PartitionID, VertexAttributeBlock[VD])]

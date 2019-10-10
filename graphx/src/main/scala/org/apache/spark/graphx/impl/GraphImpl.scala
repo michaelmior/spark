@@ -310,9 +310,7 @@ object GraphImpl {
       edgeStorageLevel: StorageLevel,
       vertexStorageLevel: StorageLevel): GraphImpl[VD, ED] = {
     val edgeRDD = EdgeRDD.fromEdges(edges)(classTag[ED], classTag[VD])
-      .withTargetStorageLevel(edgeStorageLevel)
     val vertexRDD = VertexRDD(vertices, edgeRDD, defaultVertexAttr)
-      .withTargetStorageLevel(vertexStorageLevel)
     GraphImpl(vertexRDD, edgeRDD)
   }
 
@@ -355,11 +353,9 @@ object GraphImpl {
       defaultVertexAttr: VD,
       edgeStorageLevel: StorageLevel,
       vertexStorageLevel: StorageLevel): GraphImpl[VD, ED] = {
-    val edgesCached = edges.withTargetStorageLevel(edgeStorageLevel).cache()
     val vertices =
-      VertexRDD.fromEdges(edgesCached, edgesCached.partitions.length, defaultVertexAttr)
-      .withTargetStorageLevel(vertexStorageLevel)
-    fromExistingRDDs(vertices, edgesCached)
+      VertexRDD.fromEdges(edges, edges.partitions.length, defaultVertexAttr)
+    fromExistingRDDs(vertices, edges)
   }
 
 } // end of object GraphImpl

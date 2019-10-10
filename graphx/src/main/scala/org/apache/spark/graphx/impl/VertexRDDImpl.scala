@@ -242,11 +242,6 @@ class VertexRDDImpl[VD] private[graphx] (
     new VertexRDDImpl(partitionsRDD, this.targetStorageLevel)
   }
 
-  override private[graphx] def withTargetStorageLevel(
-      targetStorageLevel: StorageLevel): VertexRDD[VD] = {
-    new VertexRDDImpl(this.partitionsRDD, targetStorageLevel)
-  }
-
   override private[graphx] def shipVertexAttributes(
       shipSrc: Boolean, shipDst: Boolean): RDD[(PartitionID, VertexAttributeBlock[VD])] = {
     partitionsRDD.mapPartitions(_.flatMap(_.shipVertexAttributes(shipSrc, shipDst)))

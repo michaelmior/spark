@@ -83,15 +83,6 @@ abstract class EdgeRDD[ED](
   def innerJoin[ED2: ClassTag, ED3: ClassTag]
       (other: EdgeRDD[ED2])
       (f: (VertexId, VertexId, ED, ED2) => ED3): EdgeRDD[ED3]
-
-  /**
-   * Changes the target storage level while preserving all other properties of the
-   * EdgeRDD. Operations on the returned EdgeRDD will preserve this storage level.
-   *
-   * This does not actually trigger a cache; to do this, call
-   * [[org.apache.spark.graphx.EdgeRDD#cache]] on the returned EdgeRDD.
-   */
-  private[graphx] def withTargetStorageLevel(targetStorageLevel: StorageLevel): EdgeRDD[ED]
 }
 
 object EdgeRDD {
