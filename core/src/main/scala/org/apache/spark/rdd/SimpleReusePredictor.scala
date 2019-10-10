@@ -20,9 +20,12 @@ package org.apache.spark.rdd
 import scala.collection.mutable.{HashMap, HashSet, LinkedHashMap}
 
 import org.apache.spark.internal.config._
-import org.apache.spark.util.CallSite
+import org.apache.spark.util._
 
 class SimpleReusePredictor extends RDDUsePredictor {
+  private val vertexClass = Utils.classForName("org.apache.spark.graphx.VertexRDD")
+  private val edgeClass = Utils.classForName("org.apache.spark.graphx.VertexRDD")
+
   private val rddUses = HashMap[Int, LinkedHashMap[Int, HashSet[Int]]]()
 
   override def trackAction(rdd: RDD[_], cs: CallSite): Unit = {
@@ -30,7 +33,9 @@ class SimpleReusePredictor extends RDDUsePredictor {
   }
 
   override def trackUse(rdd: RDD[_], child: RDD[_]): Unit = {
-    addUse(rdd, child.creationSite)
+    if (!vertexClass.isInstance(rdd) && !edgeClass.isInstance(rdd)) {
+      addUse(rdd, child.creationSite)
+    }
   }
 
   private def addUse(rdd: RDD[_], callSite: CallSite): Unit = {
